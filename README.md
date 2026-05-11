@@ -10,7 +10,7 @@ research trajectory over time.
 |---|---|---|
 | `/summarize`  | `lit-summarize`    | Summarize papers (`inputs/papers/*.pdf` or arXiv URLs) into structured markdown; index in AgentDB `papers/`. |
 | `/idea-check` | `idea-validate`    | Validate an idea via horizontal comparison (related-work matrix) or vertical lineage trace. |
-| `/draft`      | `paper-architect`  | Outline a paper or draft a specific section using your project context + cited summaries. |
+| `/paper`      | `paper-architect`  | Venue-rooted, multi-stage paper flow (`venue → direction → scout → focus → motivate → write`). Organizes everything under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`       | `ref-manager`      | Resolve `[@cite:slug]` placeholders, emit BibTeX, manage `outputs/references/*.bib`. |
 | `/convert`    | `ref-manager`      | Convert Markdown ↔ LaTeX ↔ docx via pandoc. |
 | `/mentor`     | `research-mentor`  | Weekly check-in: compare recent activity against your stated research goals and surface path corrections. |
@@ -43,11 +43,15 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 1. Drop PDFs into inputs/papers/   (or pass an arXiv URL inline)
 2. /summarize                      → outputs/summaries/<slug>.md  + AgentDB papers/<slug>
 3. /idea-check horizontal: <idea>  → outputs/idea-checks/<idea>-horizontal.md
-4. /draft outline: <idea>          → outputs/drafts/<paper>/outline.md
-5. /draft section: <paper> intro   → outputs/drafts/<paper>/intro.md
-6. /cite                           → outputs/references/<paper>.bib + resolved citation keys
-7. /convert outputs/drafts/<paper>/full.md --to=tex
-8. /mentor                         → weekly trajectory check-in
+4. /paper venue NeurIPS-2026       → outputs/papers/NeurIPS-2026/_venue.md
+5. /paper direction <slug>         → outputs/papers/<venue>/<direction>/expert.md
+6. /paper scout                    → <direction>/related-papers/*.md (+ AgentDB papers/)
+7. /paper focus                    → <direction>/focused-problem.md
+8. /paper motivate                 → <direction>/experiments/{motivation,benchmark}.md
+9. /paper write [section]          → <direction>/outline.md or sections/<section>.md
+10. /cite                          → outputs/references/<paper>.bib + resolved keys
+11. /convert <draft.md> --to=tex
+12. /mentor                        → weekly trajectory check-in
 ```
 
 ## What's gitignored vs. shared

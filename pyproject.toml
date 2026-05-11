@@ -13,6 +13,7 @@ authors = [{ name = "lucky-research contributors" }]
 dependencies = [
     "pymupdf>=1.24",       # PDF text extraction for lit-summarize
     "arxiv>=2.1",          # arXiv metadata + PDF fetch
+    "openreview-py>=1.0",  # Venue-aware paper sourcing (ICLR/NeurIPS/COLM/TMLR)
     "bibtexparser>=1.4",   # BibTeX parse/merge for ref-manager
     "pypandoc>=1.13",      # Markdown / LaTeX / docx conversion
     "pydantic>=2.7",       # Typed schemas for summaries, ideas, project state

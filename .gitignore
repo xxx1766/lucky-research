@@ -48,3 +48,4 @@ htmlcov/
 !outputs/drafts/.gitkeep
 !outputs/references/.gitkeep
 !outputs/figures/.gitkeep
+!outputs/papers/.gitkeep

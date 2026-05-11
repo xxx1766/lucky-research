@@ -13,7 +13,7 @@ Five MVP capabilities, each exposed as a Skill + slash command:
 |---|---|---|
 | `/summarize`  | `lit-summarize`    | 文献总结 — PDFs/arXiv → structured markdown summaries, indexed in AgentDB `papers/`. |
 | `/idea-check` | `idea-validate`    | idea 确认 — horizontal comparison matrix OR vertical lineage trace. |
-| `/draft`      | `paper-architect`  | 论文架构 + 写作 — venue-aware outline + per-section drafting. |
+| `/paper`      | `paper-architect`  | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → scout → focus → motivate → write`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`, `/convert` | `ref-manager`      | 参考文献 + 格式 — BibTeX merge, cite-as-you-write resolution, Markdown/LaTeX/docx via pandoc. |
 | `/mentor`     | `research-mentor`  | 科研导师 / 发展规划 — long-running trajectory tracking, weekly check-ins, path corrections. |
 
@@ -23,20 +23,31 @@ Post-MVP (not yet scaffolded): 科研绘图, 实验设计, 实验执行/分析.
 
 ```
 src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, mentor diff)
-  lit/                    PDF + arXiv ingestion
+  lit/                    PDF + arXiv ingestion (+ sourcing.py for venue-aware scout)
   ideas/                  Idea matrix + lineage helpers
   refs/                   BibTeX merge + pandoc convert
   mentor/                 Trajectory diff + check-in template
+  papers/                 Venue/direction path resolution + stage-status helpers
   common/io.py            Single source of truth for inputs/outputs paths
 
 .claude/skills/           Five MVP skills (lit-summarize, idea-validate, paper-architect,
                           ref-manager, research-mentor) — Claude-Code-discoverable
-.claude/commands/         Six slash entry points (/summarize, /idea-check, /draft, /cite,
+.claude/commands/         Six slash entry points (/summarize, /idea-check, /paper, /cite,
                           /convert, /mentor)
-.claude/agents/           RuFlo V3 framework agents (89 included) — runtime, not domain
+.claude/agents/           RuFlo V3 framework agents (89 included) + domain agents
+                          (past-work-historian)
 
 inputs/                   User-supplied papers (gitignored)
 outputs/                  Generated summaries / drafts / bibs / figures (gitignored)
+outputs/papers/<venue>/   Venue-rooted paper-output tree:
+  _venue.md                       论文特点和要求
+  <direction>/
+    expert.md                     小方向专家角色
+    related-papers/<slug>.md      对比论文
+    focused-problem.md            聚焦问题
+    experiments/                  对比实验和benchmark
+    outline.md, sections/*.md     写作思路和架构
+    status.md                     auto-updated stage tracker
 docs/                     Per-feature docs (currently empty)
 tests/                    pytest
 
@@ -57,7 +68,9 @@ arXiv URL / DOI     ──┴──▶ /summarize ──▶ outputs/summaries/<s
                                           /idea-check  (horizontal | vertical)
                                                        │
                                                        ▼
-                                          /draft       (outline | section)
+                                          /paper       (venue | direction | scout |
+                                                        focus | motivate | write |
+                                                        status)
                                                        │
                                                        ▼
                                           /cite + /convert
@@ -69,7 +82,9 @@ arXiv URL / DOI     ──┴──▶ /summarize ──▶ outputs/summaries/<s
 Skills read/write AgentDB via the `claude-flow` MCP server:
 - `mcp__claude-flow__memory_store` — index summaries / ideas / check-ins.
 - `mcp__claude-flow__memory_search` — semantic search across `papers/`, `ideas/`, `project/`.
-- Namespaces by convention: `papers/`, `ideas/`, `drafts/`, `project/`.
+- Namespaces by convention: `papers/`, `ideas/`, `drafts/`, `project/`, plus
+  `project/paper-context` (current `(venue, direction)` cursor) and
+  `project/past-work/` (prior projects surfaced by `past-work-historian`).
 
 ## Build & Test
 
