@@ -1,0 +1,50 @@
+# --- user content ---
+inputs/
+outputs/
+
+# --- per-user AgentDB / swarm state ---
+ruvector.db
+ruvector.db-shm
+ruvector.db-wal
+.swarm/
+
+# --- claude-flow runtime data (logs, sessions, metrics) ---
+.claude-flow/logs/
+.claude-flow/sessions/
+.claude-flow/metrics/
+.claude-flow/data/
+.claude-flow/learning/
+.claude-flow/security/
+.claude-flow/daemon.pid
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+*.egg-info/
+build/
+dist/
+
+# --- editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- test/coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- claude code local settings (per-user) ---
+.claude/settings.local.json
+
+# preserve the input/output directory shapes
+!inputs/papers/.gitkeep
+!outputs/summaries/.gitkeep
+!outputs/drafts/.gitkeep
+!outputs/references/.gitkeep
+!outputs/figures/.gitkeep
