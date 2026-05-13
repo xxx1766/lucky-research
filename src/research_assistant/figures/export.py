@@ -14,10 +14,10 @@ def export(svg_path: Path, *, dpi: int = 300) -> tuple[Path, Path]:
     Idempotent — re-runs overwrite outputs. PNG is rendered at the given DPI;
     PDF is vector and DPI-independent.
     """
-    import cairosvg
-
     if not svg_path.exists():
         raise FileNotFoundError(svg_path)
+
+    import cairosvg
 
     pdf_path = svg_path.with_suffix(".pdf")
     png_path = svg_path.with_suffix(".png")
