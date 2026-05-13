@@ -16,8 +16,11 @@ Five MVP capabilities, each exposed as a Skill + slash command:
 | `/paper`      | `paper-architect`  | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → scout → focus → motivate → write`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`, `/convert` | `ref-manager`      | 参考文献 + 格式 — BibTeX merge, cite-as-you-write resolution, Markdown/LaTeX/docx via pandoc. |
 | `/mentor`     | `research-mentor`  | 科研导师 / 发展规划 — long-running trajectory tracking, weekly check-ins, path corrections. |
+| `/past-work`  | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; powers recall during `/paper direction` discussions. |
+| `/boss`       | `boss-historian` (agent) | 大老板形象 — capture profile + per-meeting notes under `inputs/boss-profile/`; `/boss show` prints profile + last 3 meetings as pre-report prep. |
+| `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. |
 
-Post-MVP (not yet scaffolded): 科研绘图, 实验设计, 实验执行/分析.
+Post-MVP (not yet scaffolded): 科研绘图.
 
 ## Repository Layout
 
@@ -26,28 +29,54 @@ src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, 
   lit/                    PDF + arXiv ingestion (+ sourcing.py for venue-aware scout)
   ideas/                  Idea matrix + lineage helpers
   refs/                   BibTeX merge + pandoc convert
-  mentor/                 Trajectory diff + check-in template
+  mentor/                 Trajectory diff + check-in template + past-work + boss-profile
   papers/                 Venue/direction path resolution + stage-status helpers
+  experiments/            Slug + semver + repo-state + env-capture + version-registration
   common/io.py            Single source of truth for inputs/outputs paths
 
-.claude/skills/           Five MVP skills (lit-summarize, idea-validate, paper-architect,
-                          ref-manager, research-mentor) — Claude-Code-discoverable
-.claude/commands/         Six slash entry points (/summarize, /idea-check, /paper, /cite,
-                          /convert, /mentor)
+.claude/skills/           Six MVP skills (lit-summarize, idea-validate, paper-architect,
+                          ref-manager, research-mentor, experiment-runner) —
+                          Claude-Code-discoverable
+.claude/commands/         Nine slash entry points (/summarize, /idea-check, /paper,
+                          /cite, /convert, /mentor, /past-work, /boss, /experiment)
 .claude/agents/           RuFlo V3 framework agents (89 included) + domain agents
-                          (past-work-historian)
+                          (past-work-historian, boss-historian)
 
-inputs/                   User-supplied papers (gitignored)
+docs/                     Shared templates + per-feature docs (committed):
+                          past-work-template.md, direction-template.md,
+                          boss-profile-template.md, boss-meeting-template.md
+inputs/                   User-supplied content (gitignored):
+                          inputs/papers/        — PDFs to summarize
+                          inputs/past-work/     — one md per past project; powers the
+                                                  past-work-historian agent
+                          inputs/boss-profile/  — profile.md + meetings/YYYY-MM-DD.md;
+                                                  powers the boss-historian agent
 outputs/                  Generated summaries / drafts / bibs / figures (gitignored)
 outputs/papers/<venue>/   Venue-rooted paper-output tree:
   _venue.md                       论文特点和要求
+  _template/                      user-supplied conference .sty / .cls / .bst
   <direction>/
-    expert.md                     小方向专家角色
+    expert.md                     小方向专家角色 (YAML frontmatter + body)
     related-papers/<slug>.md      对比论文
     focused-problem.md            聚焦问题
     experiments/                  对比实验和benchmark
-    outline.md, sections/*.md     写作思路和架构
+    outline.md                    写作思路和架构 (Markdown, planning)
+    main.tex, sections/*.tex      paper prose (LaTeX-native)
+    refs.bib                      per-direction BibTeX
+    main.pdf                      auto-rendered preview / submission PDF
     status.md                     auto-updated stage tracker
+outputs/experiments/      Per-experiment tree (gitignored, cross-machine sync via the bound repo):
+  _index.md                       registry: slug · status · versions · last_sync
+  <slug>/
+    manifest.md                   YAML frontmatter (repo URL/branch/SHA, papers, status)
+    design.md                     RQ + hypothesis + baselines + traces + platforms + metrics
+    references.md                 comparison matrix from /experiment scout
+    versions/<vN.M>.md            per-version env snapshot + metrics + result pointer
+    results/<vN.M>/...            mirrored result files for /paper to consume
+    data/index.md                 data artifact registry (categorized + sha256)
+    configs/<vN.M>.requirements.txt  full pip freeze at run time
+    repo/                         optional local clone of the bound GitHub repo
+    status.md                     auto-generated 5-stage progress board
 docs/                     Per-feature docs (currently empty)
 tests/                    pytest
 
@@ -129,7 +158,7 @@ ruff check src tests
 ## Project Architecture rules
 
 - Follow Domain-Driven Design: each MVP capability is its own bounded subpackage under
-  `src/research_assistant/` (`lit/`, `ideas/`, `refs/`, `mentor/`).
+  `src/research_assistant/` (`lit/`, `ideas/`, `refs/`, `mentor/`, `papers/`, `experiments/`).
 - Keep files under 500 lines.
 - Use typed interfaces (Pydantic models or `@dataclass`) for any cross-module data shape
   — paper summaries, idea graph nodes, project state.

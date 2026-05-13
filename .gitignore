@@ -49,3 +49,11 @@ htmlcov/
 !outputs/references/.gitkeep
 !outputs/figures/.gitkeep
 !outputs/papers/.gitkeep
+!outputs/experiments/.gitkeep
+
+# experiment-bound repo working copies (per-machine, large, never shared)
+# outputs/ is already wholesale-ignored; this rule documents intent.
+outputs/experiments/*/repo/
+
+# examples to test
+examples/

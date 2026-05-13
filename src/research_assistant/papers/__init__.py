@@ -1,9 +1,9 @@
 """Helpers for the venue-rooted, multi-stage paper-output flow.
 
-Owns path resolution, slug normalization, and stage-status reporting for
-outputs/papers/<venue>/<direction>/. AgentDB context (project/paper-context)
-is touched via the skill prompts directly — the two stubs below pin the
-contract.
+Owns path resolution, slug normalization, stage-status reporting, and the
+terminal progress visualizers (footer + full board) consumed by the
+`paper-architect` skill. AgentDB context (project/paper-context) is touched
+via the skill prompts directly — the two stubs at the bottom pin the contract.
 """
 from __future__ import annotations
 
@@ -15,6 +15,18 @@ from research_assistant.common.io import PAPERS_DIR
 
 _VENUE_CLEAN = re.compile(r"[^A-Za-z0-9]+")
 _DIRECTION_CLEAN = re.compile(r"[^a-z0-9]+")
+_BIB_ENTRY = re.compile(r"^\s*@\w+\s*\{", re.MULTILINE)
+
+_BAR_WIDTH = 7
+_STAGES: tuple[str, ...] = (
+    "venue",
+    "direction",
+    "scout",
+    "focus",
+    "motivate",
+    "write",
+    "render",
+)
 
 
 def slugify_venue(name: str, year: int) -> str:
@@ -41,28 +53,191 @@ def direction_path(venue_slug: str, direction_slug: str) -> Path:
     return venue_path(venue_slug) / direction_slug
 
 
+def tex_files(direction_dir: Path) -> list[Path]:
+    """List drafted LaTeX sections under `<direction>/sections/`. Empty if absent."""
+    sections_dir = direction_dir / "sections"
+    if not sections_dir.is_dir():
+        return []
+    return sorted(sections_dir.glob("*.tex"))
+
+
+def _count_bib_entries(refs_bib: Path) -> int:
+    if not refs_bib.is_file():
+        return 0
+    try:
+        text = refs_bib.read_text(errors="replace")
+    except OSError:
+        return 0
+    return len(_BIB_ENTRY.findall(text))
+
+
 @dataclass(frozen=True)
 class StageStatus:
     has_expert: bool
     has_scout: bool
     has_focus: bool
     has_motivate: bool
+    has_benchmark: bool
+    has_outline: bool
+    has_main_tex: bool
+    has_pdf: bool
+    has_refs: bool
     sections_written: int
+    refs_entries: int
 
 
 def stage_status(direction_dir: Path) -> StageStatus:
     """Inspect a direction folder and report which stages are filled in."""
     scout_dir = direction_dir / "related-papers"
-    sections_dir = direction_dir / "sections"
+    refs_bib = direction_dir / "refs.bib"
+    refs_nonempty = refs_bib.is_file() and refs_bib.stat().st_size > 0
     return StageStatus(
         has_expert=(direction_dir / "expert.md").exists(),
         has_scout=scout_dir.is_dir() and any(scout_dir.glob("*.md")),
         has_focus=(direction_dir / "focused-problem.md").exists(),
         has_motivate=(direction_dir / "experiments" / "motivation.md").exists(),
-        sections_written=(
-            sum(1 for _ in sections_dir.glob("*.md")) if sections_dir.is_dir() else 0
-        ),
+        has_benchmark=(direction_dir / "experiments" / "benchmark.md").exists(),
+        has_outline=(direction_dir / "outline.md").exists(),
+        has_main_tex=(direction_dir / "main.tex").exists(),
+        has_pdf=(direction_dir / "main.pdf").exists(),
+        has_refs=refs_nonempty,
+        sections_written=len(tex_files(direction_dir)),
+        refs_entries=_count_bib_entries(refs_bib),
     )
+
+
+# ---------- progress rendering ----------
+
+def _stage_done(stage: str, status: StageStatus) -> bool:
+    """Return True if a stage's required artifacts are all present."""
+    if stage == "venue":
+        return True  # caller resolved a direction → venue must exist
+    if stage == "direction":
+        return status.has_expert
+    if stage == "scout":
+        return status.has_scout
+    if stage == "focus":
+        return status.has_focus
+    if stage == "motivate":
+        return status.has_motivate and status.has_benchmark
+    if stage == "write":
+        return status.has_main_tex and status.sections_written > 0
+    if stage == "render":
+        return status.has_pdf
+    raise ValueError(f"unknown stage: {stage}")
+
+
+def _stage_partial(stage: str, status: StageStatus) -> bool:
+    """Return True if a stage has some but not all of its artifacts."""
+    if _stage_done(stage, status):
+        return False
+    if stage == "motivate":
+        return status.has_motivate or status.has_benchmark
+    if stage == "write":
+        return status.has_outline or status.has_main_tex or status.sections_written > 0
+    return False
+
+
+def next_suggested(status: StageStatus) -> str:
+    """Return the recommended next slash-command for a direction."""
+    if not status.has_expert:
+        return "/paper direction <slug>"
+    if not status.has_scout:
+        return "/paper scout"
+    if not status.has_focus:
+        return "/paper focus"
+    if not (status.has_motivate and status.has_benchmark):
+        return "/paper motivate"
+    if not status.has_outline or not status.has_main_tex:
+        return "/paper write"
+    if status.sections_written == 0:
+        return "/paper write intro"
+    if not status.has_pdf:
+        return "/paper render"
+    if status.refs_entries == 0:
+        return "/cite"
+    return "all stages complete — ready to submit"
+
+
+def _progress_bar(status: StageStatus) -> tuple[str, int]:
+    done = sum(1 for s in _STAGES if _stage_done(s, status))
+    bar = "#" * done + "-" * (_BAR_WIDTH - done)
+    return bar, done
+
+
+def render_progress_footer(
+    venue: str | None,
+    direction: str | None,
+    status: StageStatus | None,
+) -> str:
+    """One-line progress footer printed at the end of every /paper subcommand."""
+    if not venue:
+        return "── no current paper · next: /paper venue <slug> ──"
+    if direction is None or status is None:
+        return f"── {venue} · venue set · next: /paper direction <slug> ──"
+    bar, done = _progress_bar(status)
+    return (
+        f"── {venue} / {direction}   "
+        f"[{bar}] {done}/{_BAR_WIDTH}   "
+        f"next: {next_suggested(status)} ──"
+    )
+
+
+def _state_marker(stage: str, status: StageStatus) -> str:
+    if _stage_done(stage, status):
+        return "[x]"
+    if _stage_partial(stage, status):
+        return "[.]"
+    return "[ ]"
+
+
+def _board_detail(stage: str, status: StageStatus) -> str:
+    if stage == "venue":
+        return "venue dir present"
+    if stage == "direction":
+        return "expert.md ok" if status.has_expert else "expert.md missing"
+    if stage == "scout":
+        return "related-papers/ present" if status.has_scout else "related-papers/ empty"
+    if stage == "focus":
+        return "focused-problem.md" if status.has_focus else "focused-problem.md missing"
+    if stage == "motivate":
+        return " · ".join([
+            "motivation.md" if status.has_motivate else "motivation.md missing",
+            "benchmark.md" if status.has_benchmark else "benchmark.md missing",
+        ])
+    if stage == "write":
+        section_word = "section" if status.sections_written == 1 else "sections"
+        return " · ".join([
+            "outline.md" if status.has_outline else "outline.md missing",
+            f"{status.sections_written} {section_word}",
+            "main.tex" if status.has_main_tex else "main.tex missing",
+        ])
+    if stage == "render":
+        return "main.pdf ok" if status.has_pdf else "main.pdf missing"
+    raise ValueError(f"unknown stage: {stage}")
+
+
+def render_progress_board(venue: str, direction: str, status: StageStatus) -> str:
+    """Multi-line full board for /paper status."""
+    bar, done = _progress_bar(status)
+    lines = [
+        f"{venue} / {direction}",
+        f"[{bar}] {done}/{_BAR_WIDTH} stages",
+        "",
+    ]
+    for i, stage in enumerate(_STAGES, start=1):
+        marker = _state_marker(stage, status)
+        lines.append(f"  {marker} {i}. {stage:<10} {_board_detail(stage, status)}")
+    cite_indent = " " * len("  [x] 1. ")
+    cite_detail = (
+        f"refs.bib: {status.refs_entries} entries"
+        if status.refs_entries
+        else "refs.bib: 0 entries  ← /cite to populate"
+    )
+    lines.append(f"{cite_indent}{'cite':<10} {cite_detail}")
+    lines.append("")
+    lines.append(f"Suggested next: {next_suggested(status)}")
+    return "\n".join(lines)
 
 
 def current_context() -> tuple[str | None, str | None]:
