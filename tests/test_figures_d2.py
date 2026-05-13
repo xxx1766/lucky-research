@@ -1,8 +1,6 @@
 """Optional D2 scaffold tests — graceful fallback if `d2` binary is missing."""
-import shutil
 from pathlib import Path
 
-import pytest
 
 from research_assistant.figures import d2 as fd2
 

@@ -1,5 +1,4 @@
 """Reference-figure intake + AgentDB payload tests."""
-import shutil
 from pathlib import Path
 
 import pytest

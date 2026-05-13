@@ -4,7 +4,6 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import pytest
 
 from research_assistant.figures import save as fs
 
