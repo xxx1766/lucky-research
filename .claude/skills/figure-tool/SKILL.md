@@ -110,11 +110,12 @@ For **kind=data**:
    - paper: `outputs/papers/<v>/<d>/figures/_scripts/plot_<slug>.py`
    - experiment: `outputs/experiments/<exp>/repo/scripts/plot_<slug>.py`
 2. Script header includes a docstring with data source (path / columns / metric) confirmed in Step 1+3.
-3. Script imports `from research_assistant.figures.save import save_all` and uses `matplotlib.style.use(<absolute-path-to-mplstyle>)` for the chosen palette.
-4. Execute the script (Bash: `python <path-to-plot-script>`). Pipe output; if non-zero exit, surface stderr.
-5. Write `<slug>.note.md` via `write_note(...)` with `backend: matplotlib`.
-6. Experiment scope: same `append_figures_to_version` link-back as structural.
-7. Print the LaTeX include snippet.
+3. Script imports `from research_assistant.figures.save import save_all` and uses `matplotlib.style.use(<absolute-path-to-mplstyle>)` for the chosen palette. `save_all` writes **`.pdf` + `.png`** (no `.svg` — for data figures the script itself is the canonical source).
+4. Jupyter-friendly: if the user prefers to iterate in a notebook, develop in Jupyter and export to `.py` via `jupytext --to py <name>.ipynb` or `File → Save As → .py`. The committed `plot_<slug>.py` stays the source of truth; the figure-tool does not generate `.ipynb` files.
+5. Execute the script (Bash: `python <path-to-plot-script>`). Pipe output; if non-zero exit, surface stderr.
+6. Write `<slug>.note.md` via `write_note(...)` with `backend: matplotlib`.
+7. Experiment scope: same `append_figures_to_version` link-back as structural.
+8. Print the LaTeX include snippet.
 
 ## Insert snippet
 

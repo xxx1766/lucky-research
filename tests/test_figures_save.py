@@ -8,16 +8,17 @@ import matplotlib.pyplot as plt
 from research_assistant.figures import save as fs
 
 
-def test_save_all_writes_three_files(tmp_path: Path):
+def test_save_all_writes_two_files(tmp_path: Path):
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot([0, 1, 2], [0, 1, 4])
     paths = fs.save_all(fig, tmp_path, "demo")
     plt.close(fig)
-    assert paths.svg.exists() and paths.svg.suffix == ".svg"
     assert paths.pdf.exists() and paths.pdf.suffix == ".pdf"
     assert paths.png.exists() and paths.png.suffix == ".png"
-    for p in (paths.svg, paths.pdf, paths.png):
+    for p in (paths.pdf, paths.png):
         assert p.stat().st_size > 0
+    # No SVG companion — data figures use the script as the source.
+    assert not (tmp_path / "demo.svg").exists()
 
 
 def test_save_all_respects_dpi(tmp_path: Path):

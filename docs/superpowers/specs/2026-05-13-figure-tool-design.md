@@ -21,7 +21,14 @@ Plus a curated collection of **reference figures** (good paper figures the user
 admires) under `inputs/figure-refs/`, indexed in AgentDB, that feed back into
 generation as multimodal style references.
 
-All figures are produced as a **triple `{svg, pdf, png}`** in the same directory.
+Output format depends on kind:
+
+* **Structural figures** are produced as a **triple `{svg, pdf, png}`** — the
+  SVG is the editable source (Claude writes it, the user iterates in Inkscape),
+  the PDF + PNG are derived via cairosvg.
+* **Data figures** are produced as a **pair `{pdf, png}`** — the matplotlib
+  script `plot_<slug>.py` is the canonical source; no SVG is emitted.
+
 LaTeX cites the `.pdf` explicitly (`\includegraphics{figures/<slug>.pdf}`), so
 camera-ready packaging can grep that pattern and tar the referenced files
 without ambiguity.
@@ -78,14 +85,14 @@ through `common/io.py`.
 
 ```
 outputs/papers/<venue>/<direction>/figures/
-  <slug>.svg          # source — Claude writes / user hand-edits in Inkscape
-  <slug>.pdf          # cairosvg-derived; what LaTeX \includegraphics actually uses
-  <slug>.png          # cairosvg-derived @300DPI; raster fallback / slides / poster
+  <slug>.svg          # STRUCTURAL ONLY — source; Claude writes / user hand-edits in Inkscape
+  <slug>.pdf          # structural: cairosvg-derived | data: matplotlib direct. LaTeX uses this.
+  <slug>.png          # 300 DPI raster — slides / poster / raster-only journals
   <slug>.note.md      # YAML frontmatter (intent, refs, palette, size, backend, created)
   _palette.yml        # OPTIONAL — direction-scoped palette override
   _styles/defs.svg    # OPTIONAL — direction-scoped shared <defs>
-  _scripts/           # OPTIONAL — for data-kind figures whose source is matplotlib
-    plot_<slug>.py
+  _scripts/           # for data-kind figures whose source is matplotlib
+    plot_<slug>.py    # the canonical source for data figures (no .svg companion)
 ```
 
 ### 3.2 Experiment scope (inside bound repo)
@@ -94,9 +101,9 @@ outputs/papers/<venue>/<direction>/figures/
 outputs/experiments/<slug>/repo/   # ← user's bound GitHub repo, already cloned
   figures/
     <vN.M>/                        # versioned by experiment semver
-      <plot>.svg
-      <plot>.pdf
-      <plot>.png
+      <plot>.svg                   # STRUCTURAL ONLY
+      <plot>.pdf                   # structural: cairosvg-derived | data: matplotlib direct
+      <plot>.png                   # 300 DPI raster
       <plot>.note.md
     _arch/                         # NON-versioned: pipeline / system diagrams
       <slug>.svg
@@ -231,11 +238,17 @@ degrades to raw SVG.
 ### 5.3 Data — matplotlib
 
 - One generator script per figure: `plot_<slug>.py` (paper scope `_scripts/` or
-  experiment scope `scripts/`).
+  experiment scope `scripts/`). **The script is the canonical source** —
+  iterate by editing the script, not the rendered figure.
 - Data source declared in the script's header docstring (path + columns +
   metric definition).
-- Helper `figures.save.save_all(fig, dir, slug)` writes `.svg/.pdf/.png` in one
-  call.
+- Helper `figures.save.save_all(fig, dir, slug)` writes **`.pdf` and `.png`**
+  in one call. **No SVG is produced** for data figures — the script is the
+  source.
+- Jupyter workflow: develop in a notebook if preferred, then export to `.py`
+  via `jupytext --to py <name>.ipynb` or `File → Save As → .py`. The figure
+  tool does not generate `.ipynb` files; the committed `plot_<slug>.py` is
+  what the experiment / paper consumes.
 - No `plotly` (HTML output incompatible with camera-ready). `seaborn` is
   permitted opportunistically (it sits on matplotlib).
 
