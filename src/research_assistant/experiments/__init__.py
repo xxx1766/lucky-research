@@ -1105,6 +1105,35 @@ def infer_fleet_from_versions() -> list[Machine]:
     return sorted(by_host.values(), key=lambda m: m.hostname)
 
 
+# ---------- figure link-back ----------
+
+def append_figures_to_version(
+    *, slug: str, version: str, figure_stems: list[str]
+) -> Path:
+    """Append `figures:` list to versions/<version>.md frontmatter. Idempotent.
+
+    figure_stems are repo-relative path stems WITHOUT extension (consumers
+    append `.pdf` / `.svg` / `.png` as needed). Mirrors the spec's 8.2
+    "experiment version add link-back".
+    """
+    import yaml
+    version_path_ = EXPERIMENTS_DIR / slug / "versions" / f"{version}.md"
+    if not version_path_.exists():
+        raise FileNotFoundError(version_path_)
+    text = version_path_.read_text(encoding="utf-8")
+    fm_match = re.match(r"^---\n(.*?)\n---\n?(.*)$", text, re.DOTALL)
+    if not fm_match:
+        raise ValueError(f"{version_path_} has no YAML frontmatter")
+    fm = yaml.safe_load(fm_match.group(1)) or {}
+    body = fm_match.group(2)
+    existing = fm.get("figures") or []
+    merged = list(dict.fromkeys([*existing, *figure_stems]))   # dedupe, preserve order
+    fm["figures"] = merged
+    new_yaml = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).rstrip("\n")
+    version_path_.write_text(f"---\n{new_yaml}\n---\n{body}", encoding="utf-8")
+    return version_path_
+
+
 # ---------- listing + parsing stubs ----------
 
 def list_experiments() -> list[Path]:
