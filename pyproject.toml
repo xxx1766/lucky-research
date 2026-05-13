@@ -17,6 +17,10 @@ dependencies = [
     "bibtexparser>=1.4",   # BibTeX parse/merge for ref-manager
     "pypandoc>=1.13",      # Markdown / LaTeX / docx conversion
     "pydantic>=2.7",       # Typed schemas for summaries, ideas, project state
+    "cairosvg>=2.7",       # SVG → PDF/PNG export for figure-tool
+    "colorthief>=0.2.1",   # Palette auto-extract from reference images
+    "matplotlib>=3.8",     # Data figures (figure-tool data kind)
+    "pyyaml>=6.0",         # YAML frontmatter parse/serialize
 ]
 
 [project.optional-dependencies]
