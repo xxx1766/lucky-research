@@ -54,3 +54,20 @@ def test_ansi_swatch_contains_color_blocks():
     assert "\x1b[48;2;" in swatch
     # Reset sequence
     assert "\x1b[0m" in swatch
+
+
+def test_extract_palette_creates_hex_strings(tmp_path: Path):
+    # Build a tiny synthetic PNG to feed colorthief.
+    from PIL import Image
+    img_path = tmp_path / "fixture.png"
+    Image.new("RGB", (60, 60), (255, 0, 0)).save(img_path)
+    palette = fp.extract_palette_from_image(img_path, count=3)
+    assert len(palette) == 3
+    for hex_color in palette:
+        assert hex_color.startswith("#")
+        assert len(hex_color) == 7
+
+
+def test_extract_palette_rejects_missing_file(tmp_path: Path):
+    with pytest.raises(FileNotFoundError):
+        fp.extract_palette_from_image(tmp_path / "no-such-file.png", count=3)

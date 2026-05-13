@@ -48,3 +48,22 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     if len(h) != 6:
         raise ValueError(f"expected #RRGGBB, got {hex_color!r}")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def extract_palette_from_image(image_path: Path, *, count: int = 6) -> list[str]:
+    """Use colorthief to pull dominant hex colors from a raster image.
+
+    Falls back to FileNotFoundError if image_path doesn't exist. Returns up to
+    `count` hex strings (#RRGGBB).
+    """
+    if not image_path.exists():
+        raise FileNotFoundError(image_path)
+    from colorthief import ColorThief
+    ct = ColorThief(str(image_path))
+    rgb_tuples = ct.get_palette(color_count=count, quality=10)
+    return [
+        "#{:02X}{:02X}{:02X}".format(
+            min(r, 255), min(g, 255), min(b, 255)
+        )
+        for r, g, b in rgb_tuples[:count]
+    ]
