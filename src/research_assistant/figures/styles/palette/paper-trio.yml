@@ -1,0 +1,10 @@
+# src/research_assistant/figures/styles/palette/paper-trio.yml
+name: paper-trio
+slots:
+  primary: "#0072B2"
+  accent: "#D55E00"
+  baseline: "#909090"
+  highlight: "#E69F00"
+sequence: ["#0072B2", "#D55E00", "#009E73"]
+colorblind_safe: true
+suggested_for: [single-column, IEEE, ACM]

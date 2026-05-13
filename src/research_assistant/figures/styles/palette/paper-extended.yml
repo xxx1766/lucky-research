@@ -1,0 +1,10 @@
+# src/research_assistant/figures/styles/palette/paper-extended.yml
+name: paper-extended
+slots:
+  primary: "#0072B2"
+  accent: "#D55E00"
+  baseline: "#909090"
+  highlight: "#E69F00"
+sequence: ["#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"]
+colorblind_safe: true
+suggested_for: [multi-line-ablation, double-column, supplementary]

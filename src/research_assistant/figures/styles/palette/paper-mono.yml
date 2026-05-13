@@ -1,0 +1,10 @@
+# src/research_assistant/figures/styles/palette/paper-mono.yml
+name: paper-mono
+slots:
+  primary: "#000000"
+  baseline: "#808080"
+  baseline_alt: "#BFBFBF"
+  accent: "#D55E00"
+sequence: ["#000000", "#808080", "#BFBFBF", "#D55E00"]
+colorblind_safe: true
+suggested_for: [single-column, IEEE, ACM, monochrome-print]

@@ -1,0 +1,10 @@
+# src/research_assistant/figures/styles/palette/dark-on-light.yml
+name: dark-on-light
+slots:
+  primary: "#1F2937"
+  accent: "#DC2626"
+  baseline: "#6B7280"
+  highlight: "#EAB308"
+sequence: ["#1F2937", "#DC2626", "#16A34A", "#7C3AED"]
+colorblind_safe: false
+suggested_for: [poster, slides, talk-figures]
