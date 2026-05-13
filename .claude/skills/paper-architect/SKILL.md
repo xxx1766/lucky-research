@@ -226,6 +226,40 @@ real PDF via the conference template. Markdown planning artifacts (`outline.md`,
 - After everything above (whether the render fired or not), print
   `render_progress_footer(venue, direction, stage_status(direction_dir))`.
 
+### Figure inclusion
+
+When the section being drafted needs a figure:
+
+1. List `figures/*.pdf` in the current direction.
+2. If a slug matches the section's keyword (read the corresponding `<slug>.note.md`
+   `intent:` field for the match), pick it; otherwise list the available slugs and
+   ask the user.
+3. Emit the include block exactly in this form (no `\graphicspath`, explicit
+   path with `.pdf` extension):
+
+```latex
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=<W>]{figures/<slug>.pdf}
+  \caption{<from the figure's note.md `intent:` — user-editable>}
+  \label{fig:<slug>}
+\end{figure}
+```
+
+`<W>` is chosen from the figure's `size.preset`:
+
+* `single-column` → `\columnwidth`
+* `double-column-half` → `0.48\textwidth`
+* `double-column-full` → `\textwidth`
+* `custom` → `\columnwidth`
+
+If no matching `figures/<slug>.pdf` exists, suggest the user runs `/figure new <slug>` first — do not synthesise a placeholder include.
+
+For **experiment-scope** figures (referenced from a paper section discussing
+that experiment), the include path uses `repo/figures/<vN.M>/<slug>.pdf` —
+read the experiment's `versions/<vN.M>.md` `figures:` list (populated by
+`/figure new --scope experiment`) to enumerate.
+
 ## Stage 7 — `/paper status [<venue>/<direction>] [--all]`
 
 **Workflow**
