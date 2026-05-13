@@ -1,0 +1,10 @@
+# Drop-in template for a per-direction palette override.
+# Place at: outputs/papers/<venue>/<direction>/figures/_palette.yml
+name: <direction-name-or-arbitrary>
+slots:
+  primary: "#000000"
+  accent: "#D55E00"
+  baseline: "#909090"
+sequence: ["#000000", "#D55E00", "#909090"]
+colorblind_safe: true
+suggested_for: []
