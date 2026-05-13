@@ -1,7 +1,7 @@
 ---
 title: Figure Tool — Design Spec
 date: 2026-05-13
-status: approved (pending writing-plans)
+status: drafted — awaiting user review
 owner: anne.x@gmicloud.ai
 ---
 
@@ -187,7 +187,7 @@ why_i_like_it: |
 | 0 | scope (only when both paper + experiment cursors exist) | persisted to this call only; not to cursor state |
 | 1 | intent ("这张图要让读者一秒看懂什么？") | single sentence, written into `note.md` |
 | 2 | kind (structural / data) | drives backend choice |
-| 3 | refs | search `project/figure-refs/` for top-5 by intent+kind, show top-3, allow extra paths/URLs |
+| 3 | refs | search `project/figure-refs/` for top-5 by intent+kind, show up to 3 (skip silently if empty), allow extra paths/URLs |
 | 4 | size | preset suggestions derived from venue's `_venue.md` (column widths) + custom |
 | 5 | palette | direction `_palette.yml` first if present, otherwise 3 from package defaults filtered by venue/kind; show ANSI swatches |
 | (gen) | Claude generates source → `export()` → print LaTeX snippet | snippet always uses `\includegraphics{figures/<slug>.pdf}` |
