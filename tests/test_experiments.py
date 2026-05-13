@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 from datetime import date
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -18,19 +19,32 @@ from research_assistant.experiments import (
     Experiment,
     ExperimentRepo,
     ExperimentStatus,
+    FeasibilityReport,
+    FeasibilitySuggestion,
+    FleetSnapshot,
+    Machine,
     Version,
     bump_major,
     bump_minor,
     capture_env,
     check_repo_updates,
     data_index_path,
+    design_version_path,
     experiment_path,
+    feasibility_path,
+    fleet_input_path,
     format_semver,
+    infer_fleet_from_versions,
+    latest_design,
+    latest_design_path,
+    latest_feasibility,
     latest_version,
+    list_designs,
     list_versions,
     manifest_path,
     mirror_results,
     next_available_slug,
+    next_design_version,
     next_suggested,
     next_version,
     parse_semver,
@@ -205,6 +219,7 @@ def _fresh_status(**overrides) -> ExperimentStatus:
         has_manifest=False, has_repo=False, has_papers_bound=False,
         has_references=False, has_design=False, has_clone=False,
         version_count=0, last_version=None, last_sync=None,
+        last_feasibility_check=None,
     )
     base.update(overrides)
     return ExperimentStatus(**base)
@@ -251,9 +266,17 @@ def test_next_suggested_after_each_gap():
     assert next_suggested(_fresh_status(
         has_manifest=True, has_repo=True,
     )) == "/experiment design"
+    # Feasibility step inserted between design done and first version add.
     assert next_suggested(_fresh_status(
         has_manifest=True, has_repo=True, has_design=True,
+    )) == "/experiment feasibility"
+    # After a feasibility check timestamp lands, suggest version add.
+    from datetime import datetime as _dt
+    assert next_suggested(_fresh_status(
+        has_manifest=True, has_repo=True, has_design=True,
+        last_feasibility_check=_dt(2026, 5, 13),
     )) == '/experiment version add v1.0 --description "..."'
+    # Once any version exists, the feasibility check is implicitly past.
     assert next_suggested(_fresh_status(
         has_manifest=True, has_repo=True, has_design=True,
         version_count=1, last_version="v1.0",
@@ -560,3 +583,271 @@ def test_register_version_rejects_bad_kind(tmp_path, monkeypatch):
     experiment_path("exp").mkdir()
     with pytest.raises(ValueError):
         register_version("exp", "v1.0", "x", kind="patch")  # type: ignore[arg-type]
+
+
+# ---------- feasibility / fleet / design-version models ----------
+
+def test_machine_pydantic_minimal():
+    m = Machine(hostname="gpu-box-3")
+    assert m.hostname == "gpu-box-3"
+    assert m.gpus == []
+    assert m.available is True
+    assert m.ram_gb is None
+
+
+def test_machine_pydantic_full():
+    m = Machine(
+        hostname="lab-a100",
+        gpus=[experiments.GPUInfo(name="A100", count=2, driver="545.23")],
+        cpu_cores=64, ram_gb=512.0, disk_gb=2000.0,
+        network="100 GbE", available=False, notes="Reserved Tue/Thu",
+    )
+    assert m.gpus[0].name == "A100"
+    assert m.available is False
+    assert m.ram_gb == 512.0
+
+
+def test_fleet_snapshot_pydantic_minimal():
+    from datetime import date as _date
+    snap = FleetSnapshot(as_of=_date(2026, 5, 13))
+    assert snap.machines == []
+    assert snap.body == ""
+
+
+def test_feasibility_suggestion_axis_validated():
+    FeasibilitySuggestion(id=1, axis="model-size", change="x", rationale="y")
+    FeasibilitySuggestion(id=2, axis="baseline-pruning", change="x", rationale="y")
+    with pytest.raises(ValidationError):
+        FeasibilitySuggestion(  # type: ignore[arg-type]
+            id=3, axis="not-an-axis", change="x", rationale="y",
+        )
+
+
+def test_feasibility_report_minimal():
+    from datetime import date as _date
+    r = FeasibilityReport(
+        slug="exp", date=_date(2026, 5, 13),
+        design_version="d1.0", verdict="tight",
+    )
+    assert r.suggestions == []
+    assert r.blockers == []
+    assert r.fleet_used == []
+
+
+# ---------- fleet + feasibility paths ----------
+
+def test_fleet_input_path_under_inputs_dir():
+    p = fleet_input_path()
+    assert p.name == "fleet.md"
+    assert p.parent.name == "inputs"
+
+
+def test_feasibility_path_collision_suffix(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    experiment_path("exp").mkdir()
+    from datetime import date as _date
+    d = _date(2026, 5, 13)
+    first = feasibility_path("exp", d)
+    assert first.name == "feasibility-2026-05-13.md"
+    first.write_text("first")
+    second = feasibility_path("exp", d)
+    assert second.name == "feasibility-2026-05-13-2.md"
+    second.write_text("second")
+    third = feasibility_path("exp", d)
+    assert third.name == "feasibility-2026-05-13-3.md"
+
+
+def test_latest_feasibility_picks_newest(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    exp = experiment_path("exp")
+    exp.mkdir()
+    # Drop multiple files; lex sort of `.md` vs `-2.md` is wrong (`.` > `-` in ASCII),
+    # so the helper must sort by (date, suffix) tuple.
+    (exp / "feasibility-2026-05-13.md").write_text("a")
+    (exp / "feasibility-2026-05-13-2.md").write_text("b")
+    (exp / "feasibility-2026-05-12.md").write_text("c")
+    assert latest_feasibility("exp").name == "feasibility-2026-05-13-2.md"
+
+
+def test_latest_feasibility_none_when_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    experiment_path("exp").mkdir()
+    assert latest_feasibility("exp") is None
+
+
+# ---------- design-plan versioning ----------
+
+def test_list_designs_sorted_semver_numeric(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    designs = experiment_path("exp") / "designs"
+    designs.mkdir(parents=True)
+    for v in ("d1.10", "d1.2", "d1.1", "d2.0"):
+        (designs / f"{v}.md").write_text("---\n---\n")
+    (designs / "v1.0.md").write_text("wrong prefix — should be filtered")
+    assert list_designs("exp") == ["d1.1", "d1.2", "d1.10", "d2.0"]
+    assert latest_design("exp") == "d2.0"
+
+
+def test_next_design_version_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    experiment_path("exp").mkdir()
+    assert next_design_version("exp", "minor") == "d1.0"
+    assert next_design_version("exp", "major") == "d1.0"
+
+
+def test_next_design_version_major_minor_bumps(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    designs = experiment_path("exp") / "designs"
+    designs.mkdir(parents=True)
+    for v in ("d1.0", "d1.1", "d2.0"):
+        (designs / f"{v}.md").write_text("---\n---\n")
+    assert next_design_version("exp", "major") == "d3.0"
+    assert next_design_version("exp", "minor") == "d2.1"
+
+
+def test_design_version_path_rejects_traversal(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    with pytest.raises(ValueError):
+        design_version_path("exp", "")
+    with pytest.raises(ValueError):
+        design_version_path("exp", "../foo")
+    with pytest.raises(ValueError):
+        design_version_path("exp", "v1.0")  # wrong prefix
+    p = design_version_path("exp", "d1.0")
+    assert p.name == "d1.0.md"
+    assert p.parent.name == "designs"
+
+
+def test_latest_design_path_returns_highest(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    designs = experiment_path("exp") / "designs"
+    designs.mkdir(parents=True)
+    (designs / "d1.0.md").write_text("---\n---\n")
+    (designs / "d1.1.md").write_text("---\n---\n")
+    assert latest_design_path("exp").name == "d1.1.md"
+
+
+def test_latest_design_path_none_when_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    experiment_path("exp").mkdir()
+    assert latest_design_path("exp") is None
+
+
+def test_bump_minor_with_design_prefix():
+    assert experiments.bump_minor("d1.3", prefix="d") == "d1.4"
+    assert experiments.bump_major("d1.3", prefix="d") == "d2.0"
+
+
+# ---------- fleet inference from versions ----------
+
+def _write_version_with_host(
+    versions_dir: Path, version: str, hostname: str, gpu_name: str | None = None
+):
+    versions_dir.mkdir(parents=True, exist_ok=True)
+    gpu_block = "gpu: []" if gpu_name is None else (
+        f"gpu:\n  - name: {gpu_name}\n    count: 1\n    driver: 545.23"
+    )
+    (versions_dir / f"{version}.md").write_text(
+        "---\n"
+        f'version: "{version}"\n'
+        'description: "x"\n'
+        "kind: minor\n"
+        "host:\n"
+        f"  hostname: {hostname}\n"
+        '  os: "Linux"\n'
+        "  arch: x86_64\n"
+        f"{gpu_block}\n"
+        "---\n\n"
+        "# body\n"
+    )
+
+
+def test_infer_fleet_from_versions_empty_when_no_experiments(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path / "missing")
+    assert infer_fleet_from_versions() == []
+
+
+def test_infer_fleet_from_versions_dedupes_by_hostname(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _write_version_with_host(
+        experiment_path("exp1") / "versions", "v1.0", "gpu-box-3", "A100",
+    )
+    _write_version_with_host(
+        experiment_path("exp2") / "versions", "v1.0", "gpu-box-3", "A100",
+    )
+    fleet = infer_fleet_from_versions()
+    assert len(fleet) == 1
+    assert fleet[0].hostname == "gpu-box-3"
+    # GPU only listed once even though seen in two versions on same host
+    assert [g.name for g in fleet[0].gpus] == ["A100"]
+
+
+def test_infer_fleet_from_versions_aggregates_gpus(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _write_version_with_host(
+        experiment_path("exp") / "versions", "v1.0", "host-a", "A100",
+    )
+    _write_version_with_host(
+        experiment_path("exp") / "versions", "v1.1", "host-a", "H100",
+    )
+    fleet = infer_fleet_from_versions()
+    assert len(fleet) == 1
+    names = {g.name for g in fleet[0].gpus}
+    assert names == {"A100", "H100"}
+
+
+def test_infer_fleet_from_versions_sorts_by_hostname(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _write_version_with_host(
+        experiment_path("exp1") / "versions", "v1.0", "zeta-host", "A100",
+    )
+    _write_version_with_host(
+        experiment_path("exp2") / "versions", "v1.0", "alpha-host", "A100",
+    )
+    fleet = infer_fleet_from_versions()
+    assert [m.hostname for m in fleet] == ["alpha-host", "zeta-host"]
+
+
+# ---------- stage_status: feasibility + design refactor ----------
+
+def test_stage_status_tracks_last_feasibility_check(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    exp = experiment_path("exp")
+    exp.mkdir()
+    manifest_path("exp").write_text("---\nslug: exp\n---\n")
+    (exp / "feasibility-2026-05-13.md").write_text("x")
+    s = stage_status("exp")
+    assert s.last_feasibility_check is not None
+
+
+def test_stage_status_has_design_via_designs_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    exp = experiment_path("exp")
+    exp.mkdir()
+    manifest_path("exp").write_text("---\nslug: exp\n---\n")
+    designs = exp / "designs"
+    designs.mkdir()
+    (designs / "d1.0.md").write_text("---\n---\n")
+    assert stage_status("exp").has_design is True
+
+
+def test_stage_status_has_design_via_legacy_singleton(tmp_path, monkeypatch):
+    """Defensive: an old design.md (pre-refactor) is still recognized."""
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    exp = experiment_path("exp")
+    exp.mkdir()
+    manifest_path("exp").write_text("---\nslug: exp\n---\n")
+    (exp / "design.md").write_text("legacy")
+    assert stage_status("exp").has_design is True
+
+
+def test_render_progress_board_shows_last_feasibility():
+    from datetime import datetime as _dt
+    s = _fresh_status(
+        has_manifest=True, has_repo=True, has_design=True,
+        version_count=1, last_version="v1.0",
+        last_feasibility_check=_dt(2026, 5, 13, 10, 0, 0),
+    )
+    board = render_progress_board("exp", s)
+    assert "Last feasibility:" in board
+    assert "2026-05-13" in board

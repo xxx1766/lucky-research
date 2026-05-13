@@ -32,10 +32,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from research_assistant.common.io import EXPERIMENTS_DIR
+from research_assistant.common.io import EXPERIMENTS_DIR, FLEET_INPUT_PATH
 
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
 _SEMVER_RE = re.compile(r"^v(\d+)\.(\d+)$")
+_DESIGN_SEMVER_RE = re.compile(r"^d(\d+)\.(\d+)$")
+_FEASIBILITY_RE = re.compile(r"^feasibility-(\d{4}-\d{2}-\d{2})(?:-(\d+))?\.md$")
 
 _BAR_WIDTH = 5
 _STAGES: tuple[str, ...] = ("init", "scout", "design", "version", "analyze")
@@ -96,7 +98,12 @@ def manifest_path(slug: str) -> Path:
     return experiment_path(slug) / "manifest.md"
 
 
-def design_path(slug: str) -> Path:
+def legacy_design_path(slug: str) -> Path:
+    """Pre-refactor singleton ``design.md`` location.
+
+    Kept as a defensive fallback for :func:`stage_status` — the canonical
+    path now lives at :func:`latest_design_path` (under ``designs/d<N.M>.md``).
+    """
     return experiment_path(slug) / "design.md"
 
 
@@ -142,45 +149,156 @@ def resolve_result_in_repo(slug: str, repo_rel_path: str) -> Path:
     return _guard_under(repo, repo / repo_rel_path, "result path")
 
 
+def design_version_path(slug: str, version: str) -> Path:
+    """Resolve ``designs/<dN.M>.md`` under an experiment. Both args validated.
+
+    The design plan is versioned in parallel with run versions (``versions/v<N.M>``);
+    ``/experiment feasibility apply`` writes a new design version after the user
+    adopts suggestions from a feasibility report.
+    """
+    parse_semver(version, prefix="d")
+    exp = experiment_path(slug)
+    return _guard_under(exp, exp / "designs" / f"{version}.md", "design version")
+
+
+def latest_design_path(slug: str) -> Path | None:
+    """Return the path of the highest-semver design file, or ``None`` if absent."""
+    v = latest_design(slug)
+    return design_version_path(slug, v) if v else None
+
+
+def fleet_input_path() -> Path:
+    """``inputs/fleet.md`` — user-maintained machine-inventory manifest.
+
+    Read by ``/experiment feasibility`` and merged with hosts auto-derived from
+    ``versions/*.md`` frontmatter. When the user volunteers fleet info during a
+    feasibility check, the skill body writes it here immediately so the next
+    check doesn't re-ask.
+    """
+    return FLEET_INPUT_PATH
+
+
+def feasibility_path(slug: str, d: date | None = None) -> Path:
+    """Collision-safe path to a feasibility report.
+
+    Mirrors :func:`research_assistant.mentor.boss_profile.rehearsal_path`: same
+    date produces ``feasibility-<date>.md``, ``feasibility-<date>-2.md``,
+    ``feasibility-<date>-3.md``, ...
+    """
+    if d is None:
+        d = date.today()
+    exp_dir = experiment_path(slug)
+    base = f"feasibility-{d.isoformat()}"
+    candidate = exp_dir / f"{base}.md"
+    if not candidate.exists():
+        return candidate
+    n = 2
+    while True:
+        nth = exp_dir / f"{base}-{n}.md"
+        if not nth.exists():
+            return nth
+        n += 1
+
+
+def _parse_feasibility_filename(name: str) -> tuple[date, int] | None:
+    """Parse ``feasibility-<YYYY-MM-DD>[-<n>].md`` into ``(date, suffix)``.
+
+    Returns ``None`` if the name doesn't match. Lexical sort on
+    ``feasibility-<date>.md`` filenames is unreliable (``"."`` > ``"-"`` in
+    ASCII puts the unsuffixed file AFTER the ``-2`` suffix in lex order),
+    so :func:`latest_feasibility` sorts on this tuple instead.
+    """
+    m = _FEASIBILITY_RE.match(name)
+    if not m:
+        return None
+    try:
+        d = date.fromisoformat(m.group(1))
+    except ValueError:
+        return None
+    suffix = int(m.group(2)) if m.group(2) else 1
+    return (d, suffix)
+
+
+def latest_feasibility(slug: str) -> Path | None:
+    """Return the newest feasibility report for ``slug`` (date + suffix order)."""
+    exp_dir = experiment_path(slug)
+    if not exp_dir.is_dir():
+        return None
+    parsed: list[tuple[tuple[date, int], Path]] = []
+    for p in exp_dir.glob("feasibility-*.md"):
+        info = _parse_feasibility_filename(p.name)
+        if info:
+            parsed.append((info, p))
+    if not parsed:
+        return None
+    parsed.sort()
+    return parsed[-1][1]
+
+
 # ---------- semver ----------
 
-def parse_semver(s: str) -> tuple[int, int]:
-    """``'v1.2'`` -> ``(1, 2)``. Raise on malformed."""
-    m = _SEMVER_RE.match(s) if isinstance(s, str) else None
+def _semver_regex(prefix: str) -> re.Pattern[str]:
+    if prefix == "v":
+        return _SEMVER_RE
+    if prefix == "d":
+        return _DESIGN_SEMVER_RE
+    raise ValueError(f"unsupported semver prefix: {prefix!r}")
+
+
+def parse_semver(s: str, prefix: str = "v") -> tuple[int, int]:
+    """``'v1.2'`` -> ``(1, 2)``. Raise on malformed.
+
+    ``prefix`` controls the expected version prefix; pass ``"d"`` for the
+    parallel design-plan semver (``d1.0``, ``d1.1`` ...).
+    """
+    m = _semver_regex(prefix).match(s) if isinstance(s, str) else None
     if not m:
         raise ValueError(f"malformed semver: {s!r}")
     return int(m.group(1)), int(m.group(2))
 
 
-def format_semver(major: int, minor: int) -> str:
-    return f"v{major}.{minor}"
+def format_semver(major: int, minor: int, prefix: str = "v") -> str:
+    return f"{prefix}{major}.{minor}"
 
 
-def bump_major(v: str) -> str:
-    major, _ = parse_semver(v)
-    return format_semver(major + 1, 0)
+def bump_major(v: str, prefix: str = "v") -> str:
+    major, _ = parse_semver(v, prefix=prefix)
+    return format_semver(major + 1, 0, prefix=prefix)
 
 
-def bump_minor(v: str) -> str:
-    major, minor = parse_semver(v)
-    return format_semver(major, minor + 1)
+def bump_minor(v: str, prefix: str = "v") -> str:
+    major, minor = parse_semver(v, prefix=prefix)
+    return format_semver(major, minor + 1, prefix=prefix)
+
+
+def _list_semver_files(dir_path: Path, prefix: str) -> list[str]:
+    """Read ``*.md`` files under ``dir_path``, filter to well-formed semver
+    stems for ``prefix``, return sorted numerically by (major, minor).
+    """
+    if not dir_path.is_dir():
+        return []
+    out: list[str] = []
+    for p in dir_path.glob("*.md"):
+        try:
+            parse_semver(p.stem, prefix=prefix)
+        except ValueError:
+            continue
+        out.append(p.stem)
+    out.sort(key=lambda s: parse_semver(s, prefix=prefix))
+    return out
 
 
 def list_versions(slug: str) -> list[str]:
     """Read ``versions/*.md``, return semver-sorted slugs (numeric, not lexical)."""
-    exp = experiment_path(slug)
-    versions_dir = exp / "versions"
-    if not versions_dir.is_dir():
-        return []
-    out: list[str] = []
-    for p in versions_dir.glob("*.md"):
-        try:
-            parse_semver(p.stem)
-        except ValueError:
-            continue
-        out.append(p.stem)
-    out.sort(key=parse_semver)
-    return out
+    return _list_semver_files(experiment_path(slug) / "versions", "v")
+
+
+def list_designs(slug: str) -> list[str]:
+    """Read ``designs/*.md``, return semver-sorted slugs (numeric).
+
+    Mirror of :func:`list_versions` for design-plan semver (``d1.0`` ...).
+    """
+    return _list_semver_files(experiment_path(slug) / "designs", "d")
 
 
 def latest_version(slug: str) -> str | None:
@@ -188,23 +306,37 @@ def latest_version(slug: str) -> str | None:
     return vs[-1] if vs else None
 
 
+def latest_design(slug: str) -> str | None:
+    ds = list_designs(slug)
+    return ds[-1] if ds else None
+
+
+def _next_in_series(vs: list[str], kind: str, prefix: str) -> str:
+    """Suggest the next semver from a sorted list. Empty -> ``<prefix>1.0``."""
+    if kind not in ("major", "minor"):
+        raise ValueError(f"unknown bump kind: {kind!r}")
+    if not vs:
+        return format_semver(1, 0, prefix=prefix)
+    if kind == "major":
+        return bump_major(vs[-1], prefix=prefix)
+    highest_major = parse_semver(vs[-1], prefix=prefix)[0]
+    candidates = [v for v in vs if parse_semver(v, prefix=prefix)[0] == highest_major]
+    return bump_minor(candidates[-1], prefix=prefix)
+
+
 def next_version(slug: str, kind: Literal["major", "minor"]) -> str:
-    """Suggest the next semver. ``'major'`` bumps the highest major; ``'minor'``
+    """Suggest the next run-semver. ``'major'`` bumps the highest major; ``'minor'``
     bumps the highest minor under the current highest major. Empty -> ``v1.0``.
 
     Suggestion only — callers are free to register a non-monotonic explicit
     version (e.g. skip from ``v1.3`` to ``v3.0``).
     """
-    if kind not in ("major", "minor"):
-        raise ValueError(f"unknown bump kind: {kind!r}")
-    vs = list_versions(slug)
-    if not vs:
-        return "v1.0"
-    if kind == "major":
-        return bump_major(vs[-1])
-    highest_major = parse_semver(vs[-1])[0]
-    candidates = [v for v in vs if parse_semver(v)[0] == highest_major]
-    return bump_minor(candidates[-1])
+    return _next_in_series(list_versions(slug), kind, "v")
+
+
+def next_design_version(slug: str, kind: Literal["major", "minor"]) -> str:
+    """Suggest the next design-plan semver. Mirror of :func:`next_version`."""
+    return _next_in_series(list_designs(slug), kind, "d")
 
 
 # ---------- models ----------
@@ -274,6 +406,55 @@ class DataArtifact(BaseModel):
     description: str = ""
 
 
+class Machine(BaseModel):
+    """One host in the user's fleet. Used by ``/experiment feasibility``."""
+    hostname: str
+    gpus: list[GPUInfo] = Field(default_factory=list)
+    cpu_cores: int | None = None
+    ram_gb: float | None = None
+    disk_gb: float | None = None
+    network: str | None = None
+    available: bool = True
+    notes: str = ""
+
+
+class FleetSnapshot(BaseModel):
+    """Snapshot of the user's available machines at a point in time."""
+    as_of: date
+    machines: list[Machine] = Field(default_factory=list)
+    body: str = ""
+
+
+class FeasibilitySuggestion(BaseModel):
+    """One purpose-preserving modification to fit the experiment to the fleet."""
+    id: int
+    axis: Literal[
+        "model-size", "baseline-pruning", "batching", "sharding",
+        "dataset-subset", "sequential", "lighter-eval", "mixed-precision",
+        "gradient-checkpointing", "other",
+    ]
+    change: str
+    rationale: str
+    cost: str = ""
+
+
+class FeasibilityReport(BaseModel):
+    """The structured output of ``/experiment feasibility``.
+
+    Frontmatter of ``feasibility-<date>.md`` files round-trips through this model.
+    ``/experiment feasibility apply`` reads ``suggestions`` to drive design
+    revisions.
+    """
+    slug: str
+    date: date
+    design_version: str                       # 'd1.0'
+    verdict: Literal["feasible", "tight", "infeasible"]
+    fleet_used: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    suggestions: list[FeasibilitySuggestion] = Field(default_factory=list)
+    body: str = ""
+
+
 # ---------- stage status + progress rendering ----------
 
 @dataclass(frozen=True)
@@ -287,6 +468,7 @@ class ExperimentStatus:
     version_count: int
     last_version: str | None
     last_sync: datetime | None
+    last_feasibility_check: datetime | None
 
 
 def stage_status(slug: str) -> ExperimentStatus:
@@ -311,9 +493,15 @@ def stage_status(slug: str) -> ExperimentStatus:
         last_sync = datetime.fromtimestamp(manifest.stat().st_mtime)
     references = references_path(slug)
     has_references = references.is_file() and references.stat().st_size > 0
-    has_design = design_path(slug).is_file()
+    # has_design: any file in designs/<dN.M>.md, or the legacy singleton.
+    has_design = bool(list_designs(slug)) or legacy_design_path(slug).is_file()
     has_clone = repo_clone_path(slug).is_dir()
     versions = list_versions(slug) if exp_dir.is_dir() else []
+    last_feasibility_check: datetime | None = None
+    if exp_dir.is_dir():
+        lf = latest_feasibility(slug)
+        if lf and lf.is_file():
+            last_feasibility_check = datetime.fromtimestamp(lf.stat().st_mtime)
     return ExperimentStatus(
         has_manifest=has_manifest,
         has_repo=has_repo,
@@ -324,6 +512,7 @@ def stage_status(slug: str) -> ExperimentStatus:
         version_count=len(versions),
         last_version=versions[-1] if versions else None,
         last_sync=last_sync,
+        last_feasibility_check=last_feasibility_check,
     )
 
 
@@ -363,6 +552,9 @@ def next_suggested(s: ExperimentStatus) -> str:
         return "/experiment scout"
     if not s.has_design:
         return "/experiment design"
+    # Once design exists, pre-flight the fleet before the first run.
+    if s.last_feasibility_check is None and s.version_count == 0:
+        return "/experiment feasibility"
     if s.version_count == 0:
         return '/experiment version add v1.0 --description "..."'
     if s.version_count < 2:
@@ -410,7 +602,7 @@ def _board_detail(stage: str, s: ExperimentStatus) -> str:
             return "papers bound · run /experiment scout"
         return "no papers bound (optional)"
     if stage == "design":
-        return "design.md ok" if s.has_design else "design.md missing"
+        return "designs/ populated" if s.has_design else "designs/ empty"
     if stage == "version":
         if s.version_count == 0:
             return "no versions yet"
@@ -429,9 +621,14 @@ def render_progress_board(slug: str, status: ExperimentStatus) -> str:
             f"  {_state_marker(stage, status)} {i}. {stage:<10} "
             f"{_board_detail(stage, status)}"
         )
-    if status.last_sync:
+    if status.last_sync or status.last_feasibility_check:
         lines.append("")
-        lines.append(f"Last sync: {status.last_sync.isoformat(timespec='seconds')}")
+        if status.last_sync:
+            lines.append(f"Last sync:        {status.last_sync.isoformat(timespec='seconds')}")
+        if status.last_feasibility_check:
+            lines.append(
+                f"Last feasibility: {status.last_feasibility_check.isoformat(timespec='seconds')}"
+            )
     lines.append("")
     lines.append(f"Suggested next: {next_suggested(status)}")
     return "\n".join(lines)
@@ -822,6 +1019,92 @@ def register_version(
     return out_path
 
 
+# ---------- fleet inference ----------
+
+def _heuristic_extract_host_and_gpus(text: str) -> tuple[str | None, list[GPUInfo]]:
+    """Walk YAML frontmatter looking for ``host:`` + ``gpu:`` blocks.
+
+    Same heuristic-grade approach :func:`stage_status` uses for ``url:`` and
+    ``papers:`` — robust to the frontmatter shape :func:`register_version`
+    writes today, may miss hand-edited files with unusual indentation. The
+    interactive fallback in ``/experiment feasibility`` covers gaps.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None, []
+    hostname: str | None = None
+    gpus: list[GPUInfo] = []
+    section: str | None = None
+    current_gpu: dict | None = None
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if not line[:1].isspace():
+            section = None
+            current_gpu = None
+            stripped = line.rstrip()
+            if stripped.startswith("host:") and stripped.strip() != "host: null":
+                section = "host"
+            elif stripped == "gpu:":
+                section = "gpu"
+            continue
+        content = line.strip()
+        if section == "host" and content.startswith("hostname:"):
+            val = content.split(":", 1)[1].strip().strip('"').strip("'")
+            if val and val != "null":
+                hostname = val
+        elif section == "gpu":
+            if content.startswith("- name:"):
+                if current_gpu:
+                    gpus.append(GPUInfo(**current_gpu))
+                name_val = content.split(":", 1)[1].strip().strip('"').strip("'")
+                current_gpu = {"name": name_val, "count": 1}
+            elif current_gpu is not None:
+                if content.startswith("count:"):
+                    try:
+                        current_gpu["count"] = int(content.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
+                elif content.startswith("driver:"):
+                    val = content.split(":", 1)[1].strip().strip('"').strip("'")
+                    if val and val != "null":
+                        current_gpu["driver"] = val
+    if current_gpu:
+        gpus.append(GPUInfo(**current_gpu))
+    return hostname, gpus
+
+
+def infer_fleet_from_versions() -> list[Machine]:
+    """Walk every experiment's ``versions/*.md`` files, extract host + GPU info,
+    dedupe by hostname. Returned machines are sorted by hostname.
+
+    Used by ``/experiment feasibility`` to bootstrap the fleet view from past
+    runs. The interactive fallback in the skill body handles machines the user
+    has but hasn't run anything on yet, persisting to ``inputs/fleet.md``.
+    """
+    if not EXPERIMENTS_DIR.is_dir():
+        return []
+    by_host: dict[str, Machine] = {}
+    for version_file in EXPERIMENTS_DIR.glob("*/versions/*.md"):
+        try:
+            text = version_file.read_text(errors="replace")
+        except OSError:
+            continue
+        hostname, gpus = _heuristic_extract_host_and_gpus(text)
+        if not hostname:
+            continue
+        if hostname in by_host:
+            existing = by_host[hostname]
+            existing_names = {g.name for g in existing.gpus}
+            for g in gpus:
+                if g.name not in existing_names:
+                    existing.gpus.append(g)
+                    existing_names.add(g.name)
+        else:
+            by_host[hostname] = Machine(hostname=hostname, gpus=gpus)
+    return sorted(by_host.values(), key=lambda m: m.hostname)
+
+
 # ---------- listing + parsing stubs ----------
 
 def list_experiments() -> list[Path]:
@@ -860,6 +1143,32 @@ def parse_data_index(path: Path) -> list[DataArtifact]:
     """Parse ``data/index.md`` sections. Not implemented yet."""
     raise NotImplementedError(
         "YAML frontmatter parsing pending real /experiment sync"
+    )
+
+
+def parse_fleet(path: Path) -> FleetSnapshot:
+    """Parse ``inputs/fleet.md`` into a :class:`FleetSnapshot`.
+
+    Not implemented yet — lands with the plugin-wide YAML-frontmatter parser
+    decision. ``/experiment feasibility`` reads the YAML inline (via Claude's
+    parsing in the skill body) until this stub lands a real implementation.
+    """
+    raise NotImplementedError(
+        "YAML frontmatter parsing pending real /experiment feasibility"
+    )
+
+
+def parse_feasibility(path: Path) -> FeasibilityReport:
+    """Parse a ``feasibility-<date>.md`` file. Not implemented yet."""
+    raise NotImplementedError(
+        "YAML frontmatter parsing pending real /experiment feasibility"
+    )
+
+
+def parse_design(path: Path) -> dict:
+    """Parse a ``designs/<dN.M>.md`` file. Not implemented yet."""
+    raise NotImplementedError(
+        "YAML frontmatter parsing pending real /experiment design"
     )
 
 

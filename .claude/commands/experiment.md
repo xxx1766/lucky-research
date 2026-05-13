@@ -16,8 +16,21 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
 - `/experiment scout` — for each paper in `manifest.papers`, fetch its AgentDB
   `papers/<slug>` summary and pre-fill `references.md` with a comparison matrix
   (trace · platform · metrics · code-availability). User edits.
-- `/experiment design` — interactive narrowing → write `design.md` (RQ, hypothesis,
-  baselines, traces, platforms, metrics, success criteria).
+- `/experiment design` — interactive narrowing → write `designs/d<N.M>.md`
+  (RQ, hypothesis, baselines, traces, platforms, metrics, success criteria).
+  First run writes `d1.0`; re-runs prompt for minor (`d1.1`) vs. major (`d2.0`).
+- `/experiment feasibility` — pre-flight check against the user's fleet
+  (`inputs/fleet.md` + hosts auto-derived from past `versions/*.md`). Drafts a
+  dated `feasibility-<YYYY-MM-DD>.md` with `verdict` + `blockers` +
+  `suggestions` that preserve the experiment's purpose. Asks for any missing
+  machine info and writes it back to `inputs/fleet.md` immediately. **Network-
+  free**, advisory only — never mutates design files.
+- `/experiment feasibility apply [<feasibility-file>]` — interactive: shows the
+  suggestion list (1, 2, 3, ...), takes a user-chosen subset (e.g. `1,3` or
+  `all` or `none`), bumps the design version (minor by default, major on opt-in),
+  and writes a new `designs/d<N.M>.md` with `derived_from` + `feasibility_source`
+  + `adopted_suggestions` frontmatter. **Research question**, **Hypothesis**,
+  and **Success criteria** sections are preserved verbatim from the predecessor.
 - `/experiment sync` — `git ls-remote` the bound repo's branch, compare to
   `manifest.last_known_sha`, update on confirmation. The only `/experiment` command
   that touches the network.

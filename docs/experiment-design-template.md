@@ -1,4 +1,20 @@
-# Design — {{title}}
+---
+design_version: d1.0                   # bumped by /experiment design re-run + /experiment feasibility apply
+created_at: <YYYY-MM-DD>
+derived_from: null                     # null for d1.0; predecessor version slug for d1.1+
+feasibility_source: null               # path to feasibility-<date>.md when revision was driven by adoption
+adopted_suggestions: []                # IDs from the feasibility report's `suggestions` list
+---
+
+# Design — {{title}} — {{design_version}}
+
+<!--
+Section convention: `/experiment feasibility apply` preserves the
+**Research question**, **Hypothesis**, and **Success criteria** sections
+verbatim across design versions — those define the experiment's purpose.
+Only the other sections (Baselines, Traces, Platforms, Metrics, Risks) get
+rewritten to fit a feasibility suggestion.
+-->
 
 ## Research question
 
