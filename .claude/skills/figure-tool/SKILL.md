@@ -36,7 +36,7 @@ At every `/figure ...` invocation, read both cursors:
 * `mcp__claude-flow__memory_retrieve` namespace=`project`, key=`experiment-context.current`
   → expect `{"slug": "..."}` or absent
 
-Call `research_assistant.figures.paths.resolve_scope(paper_ctx, experiment_ctx, cli_scope)`:
+Call `research_assistant.figures.paths.resolve_scope(paper_ctx=..., experiment_ctx=..., cli_scope=...)` (all three args are keyword-only):
 
 * `NoScopeError` → tell the user to run `/paper venue` or `/experiment init`.
 * `AmbiguousScopeError` → ask "paper or experiment?" (step 0).

@@ -1121,7 +1121,7 @@ def append_figures_to_version(
     if not version_path_.exists():
         raise FileNotFoundError(version_path_)
     text = version_path_.read_text(encoding="utf-8")
-    fm_match = re.match(r"^---\n(.*?)\n---\n?(.*)$", text, re.DOTALL)
+    fm_match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", text, re.DOTALL)
     if not fm_match:
         raise ValueError(f"{version_path_} has no YAML frontmatter")
     fm = yaml.safe_load(fm_match.group(1)) or {}
