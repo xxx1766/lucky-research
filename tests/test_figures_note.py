@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from research_assistant.figures import note as fn
 from research_assistant.figures.schema import FigureNote, FigureSize
@@ -49,5 +50,22 @@ def test_read_note_rejects_no_frontmatter(tmp_path: Path):
 def test_read_note_rejects_bad_yaml(tmp_path: Path):
     path = tmp_path / "bad.note.md"
     path.write_text("---\nslug: x\nkind: invalid-kind\n---\n")
-    with pytest.raises(Exception):  # ValidationError from pydantic
+    with pytest.raises(ValidationError):
         fn.read_note(path)
+
+
+def test_read_note_handles_crlf(tmp_path: Path):
+    # Some users edit on Windows or have git core.autocrlf=true.
+    path = tmp_path / "crlf.note.md"
+    fn.write_note(path, _sample())
+    text = path.read_text()
+    path.write_text(text.replace("\n", "\r\n"), encoding="utf-8")
+    loaded = fn.read_note(path)
+    assert loaded.note == _sample()
+
+
+def test_write_note_with_no_body(tmp_path: Path):
+    path = tmp_path / "x.note.md"
+    fn.write_note(path, _sample())
+    loaded = fn.read_note(path)
+    assert loaded.body == ""

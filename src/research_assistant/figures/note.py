@@ -9,7 +9,7 @@ import yaml
 
 from research_assistant.figures.schema import FigureNote
 
-_FM_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
+_FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
 
 
 @dataclass
@@ -19,7 +19,7 @@ class LoadedNote:
 
 
 def write_note(path: Path, note: FigureNote, *, body: str = "") -> None:
-    """Write a <slug>.note.md atomically. Overwrites if present."""
+    """Write a <slug>.note.md. Overwrites if present."""
     payload = note.model_dump(mode="json")
     yaml_text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True).rstrip("\n")
     text = f"---\n{yaml_text}\n---\n"
@@ -36,5 +36,5 @@ def read_note(path: Path) -> LoadedNote:
         raise ValueError(f"{path} has no YAML frontmatter")
     fm = yaml.safe_load(m.group(1)) or {}
     note = FigureNote.model_validate(fm)
-    body = m.group(2).strip()
+    body = m.group(2).lstrip("\r\n").rstrip()
     return LoadedNote(note=note, body=body)
