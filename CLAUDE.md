@@ -19,8 +19,7 @@ Five MVP capabilities, each exposed as a Skill + slash command:
 | `/past-work`  | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; powers recall during `/paper direction` discussions. |
 | `/boss`       | `boss-historian` (agent) | 大老板形象 — capture profile + per-meeting notes under `inputs/boss-profile/`; `/boss show` prints profile + last 3 meetings as pre-report prep. |
 | `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. |
-
-Post-MVP (not yet scaffolded): 科研绘图.
+| `/figure`     | `figure-tool`       | 科研绘图 — structural SVG + matplotlib data plots + reference-figure library; scoped to current /paper or /experiment cursor. |
 
 ## Repository Layout
 
