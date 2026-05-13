@@ -50,6 +50,23 @@ def test_figure_note_rejects_unknown_kind():
         )
 
 
+def test_figure_note_rejects_mixed_kind():
+    # FigureNote shares FigureKind with FigureRef; the kind_excludes_mixed
+    # validator narrows FigureNote to structural|data while FigureRef may keep mixed.
+    with pytest.raises(ValidationError):
+        FigureNote(
+            slug="x", kind="mixed", scope="paper", anchor="a", intent="i",
+            size=FigureSize(width_in=1.0, height_in=1.0, preset="custom"),
+            palette="paper-mono", refs=[], backend="raw-svg",
+            created=date(2026, 5, 13),
+        )
+
+
+def test_figure_ref_accepts_mixed_kind():
+    ref = FigureRef(slug="x", source="s", kind="mixed")
+    assert ref.kind == "mixed"
+
+
 def test_figure_ref_minimum_valid():
     ref = FigureRef(
         slug="vaswani-transformer-arch",
