@@ -252,3 +252,41 @@ def current_context() -> tuple[str | None, str | None]:
 def set_context(venue: str, direction: str | None) -> None:
     """Write project/paper-context to AgentDB. See `current_context`."""
     raise NotImplementedError("AgentDB context write pending real skill body")
+
+
+# ---------- binding re-exports ----------
+
+# Lazy imports avoid a circular import: binding.py imports from
+# `research_assistant.papers` (this module) for path helpers, so we re-export
+# after this module finishes defining them.
+from research_assistant.papers.binding import (  # noqa: E402
+    AlreadyBoundError,
+    BindError,
+    BindingResult,
+    ConflictError,
+    DivergedError,
+    NotBoundError,
+    SyncResult,
+    bind,
+    is_bound,
+    read_binding_from_expert_md,
+    restore,
+    sync,
+    unbind,
+)
+
+__all__ = [
+    "AlreadyBoundError",
+    "BindError",
+    "BindingResult",
+    "ConflictError",
+    "DivergedError",
+    "NotBoundError",
+    "SyncResult",
+    "bind",
+    "is_bound",
+    "read_binding_from_expert_md",
+    "restore",
+    "sync",
+    "unbind",
+]

@@ -13,6 +13,19 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
 - `/paper direction <slug>` — open or scope a sub-direction under the current venue.
   Past-work-historian agent seeds the discussion; Claude drafts a starter `expert.md`
   and registers an optional `code_repo:` pointer to the experiment-code GitHub repo.
+- `/paper bind <experiment-slug>` — move `outputs/papers/<v>/<d>/` into the bound
+  experiment's git repo (`outputs/experiments/<slug>/repo/paper/<v>/<d>/`),
+  replace the local path with a symlink, copy venue files, write `.gitignore`,
+  record the binding in `expert.md`. Idempotent. Pass `--force` to re-bind from
+  a different experiment.
+- `/paper unbind [--keep-files]` — remove the symlink. With `--keep-files`, also
+  copy the experiment repo's contents back to a real local directory.
+- `/paper sync [-m "<msg>"]` — stage just `paper/<v>/<d>/` paths, fetch (no
+  auto-merge), commit, and push. Auto-generates a message of form
+  `paper(<v>/<d>): <verb> <files>` unless `-m` is given. Refuses with a hint to
+  `git pull --rebase` if the upstream is ahead.
+- `/paper restore [<venue>/<direction>] [--all]` — re-create the local symlinks
+  from cloned experiment repos (cross-machine bootstrap path).
 - `/paper scout` — source related papers from the venue + arXiv into the current
   direction's `related-papers/`.
 - `/paper focus` — narrow to a focused problem; write `focused-problem.md`.
@@ -25,7 +38,8 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
   current direction (also persisted to `<direction>/status.md`). Pass an explicit
   `<venue>/<direction>` to target a specific folder and adopt it as the new cursor
   (recovery path for in-flight projects). Pass `--all` to walk every venue/direction
-  and refresh each `status.md`.
+  and refresh each `status.md`. Auto soft-restores missing symlinks if their
+  experiment repos are present locally.
 
 ## Action
 

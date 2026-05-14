@@ -89,6 +89,124 @@ outputs/papers/<venue>/
     status.md                auto-updated stage tracker
 ```
 
+## Storage model — where paper files actually live
+
+By default, `outputs/papers/<v>/<d>/` is a real local directory and is gitignored
+(so a paper exists only on the machine that authored it). Once the user runs
+`/paper bind <experiment-slug>` (see Stage 0 below), that directory becomes a
+**symlink** into the bound experiment's git repo at
+`outputs/experiments/<slug>/repo/paper/<v>/<d>/`. The experiment's repo is the
+durable source of truth — clone it on a new machine and the paper comes along.
+
+All writing commands (`/paper write`, `/paper render`, `/figure new`,
+`/pseudocode new`) keep writing to `outputs/papers/<v>/<d>/`. The symlink is
+transparent — Python's `open()`, `Path.mkdir()`, etc. follow it. **No stage in
+this skill needs to be aware of binding state.** The exception is `/paper sync`
+(Stage 0.5), which operates on the experiment repo's git remote.
+
+Venue-level files (`outputs/papers/<venue>/_venue.md` and
+`outputs/papers/<venue>/_template/`) are NOT symlinks — they are real local
+copies kept in sync with the experiment repo by `/paper bind` (Q2c / C-2 in the
+design). Two experiments that target the same venue each carry their own copy
+in their own repo, with `/paper bind` copying the first-bound experiment's
+version into `outputs/papers/<venue>/`.
+
+## Stage 0 — `/paper bind <experiment-slug>`
+
+Move the local `outputs/papers/<v>/<d>/` directory into the named experiment's
+repo at `<exp-repo>/paper/<v>/<d>/`, replace the local path with a symlink,
+copy venue files, write `.gitignore`, record the binding. Driven by
+`research_assistant.papers.bind(venue=..., direction=..., experiment_slug=...,
+force=...)`.
+
+**Preconditions**
+- The current `(venue, direction)` cursor is set in AgentDB
+  `project/paper-context.current`.
+- The named experiment exists with a local clone at
+  `outputs/experiments/<slug>/repo/`. If not, error out with a hint to run
+  `/experiment init` first.
+
+**Workflow**
+1. Read the cursor; resolve `(venue, direction)`. Reject if absent.
+2. Call `research_assistant.papers.bind(venue=v, direction=d,
+   experiment_slug=<slug>, force=<flag>)`. Surface exceptions cleanly:
+   - `BindError` ("experiment not cloned") → tell user to run /experiment init.
+   - `ConflictError` (`<exp-repo>/paper/<v>/<d>/` already populated) → suggest
+     `--force` after the user verifies they want to overwrite.
+   - `AlreadyBoundError` (already linked to a different experiment) → suggest
+     `/paper unbind` first or `--force`.
+3. Print the resulting `BindingResult`:
+   - the new symlink path,
+   - the real paper dir inside the experiment repo,
+   - venue files copied (`_venue.md`, `_template/`),
+   - bytes migrated.
+4. Update `expert.md` frontmatter (the helper already wrote `experiment:
+   <slug>`; if the user has additional experiments to reference, prompt for
+   them and write `experiments: [<list>]`).
+5. Record `project/paper-bindings.<v>__<d>` = `{experiment_slug: <slug>,
+   bound_at: <iso-timestamp>}` in AgentDB via
+   `mcp__claude-flow__memory_store` (fast cache; the durable record is in
+   `expert.md`).
+6. Trigger an initial sync — `/paper sync` (Stage 0.5) so the migration lands
+   in the remote.
+
+`/paper unbind [--keep-files]` is the inverse — calls
+`research_assistant.papers.unbind(venue=v, direction=d, keep_files=<flag>)`.
+Removes the symlink; with `--keep-files`, copies the experiment repo's content
+back to a regular local directory at the symlink path.
+
+## Stage 0.5 — `/paper sync [-m "<msg>"]`
+
+Stage `paper/<v>/<d>/` paths inside the experiment repo, fetch (no auto-merge),
+commit, and push. Driven by
+`research_assistant.papers.sync(venue=v, direction=d, message=<opt>)`.
+
+**Workflow**
+1. Resolve the bound experiment via `papers.is_bound(v, d)`; reject with
+   `NotBoundError` if absent.
+2. Call `papers.sync(...)`. Surface:
+   - `DivergedError` → print "remote is ahead by N commits. Run
+     `git pull --rebase` inside `<exp-repo>` then re-run /paper sync."
+   - `SyncResult.committed=False` with "no changes" → tell user nothing to do.
+   - Successful commit → print the commit SHA + the auto-generated message
+     (`paper(<v>/<d>): <verb> <files>`). `verb ∈ {write, revise, render, prune}`.
+3. If `pushed=False` (e.g. no remote configured), print a one-line warning but
+   leave the commit in place — `git push` can be retried manually.
+
+**Scope**
+- Stages only paths under `paper/<v>/<d>/`. Dirty non-paper code elsewhere in
+  the experiment repo is left alone (Q3d in the design).
+- `-m "<msg>"` overrides the auto-generated message.
+
+## Cross-machine restore
+
+On a fresh checkout of lucky-research, `outputs/` is empty (gitignored). To get
+paper artifacts back:
+
+```bash
+git clone git@github.com:xxx1766/lucky-research.git
+cd lucky-research && pip install -e ".[dev]"
+
+# Restore each experiment that owns one or more papers:
+/experiment init --from-url git@github.com:xxx1766/weightlet-exp.git
+/experiment init --from-url git@github.com:xxx1766/sparse-attn-exp.git
+
+# Then re-create the paper symlinks in one shot:
+/paper restore --all
+```
+
+`/paper restore [--all] [<venue>/<direction>]` is driven by
+`research_assistant.papers.restore(venue=..., direction=..., all_papers=...)`.
+It walks `outputs/experiments/*/repo/paper/*/*/`, and for each
+`(experiment, venue, direction)` triple it creates a symlink at
+`outputs/papers/<v>/<d>/` and copies venue-level files. It refuses to clobber
+real local directories — if a `outputs/papers/<v>/<d>/` already exists as a
+real (non-symlink) dir, the restore for that paper is skipped.
+
+`/paper status` soft-restores missing symlinks automatically — useful when the
+user runs status on a freshly cloned machine before remembering to run
+`/paper restore`.
+
 ## Stage 1 — `/paper venue <slug>`
 
 **Inputs**
