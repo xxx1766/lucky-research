@@ -204,6 +204,7 @@ real PDF via the conference template. Markdown planning artifacts (`outline.md`,
        `\input`s each `sections/<name>.tex`, sets `\bibliography{refs}`.
      - `<direction>/sections/` — empty directory.
      - `<direction>/refs.bib` — empty file.
+     - Call `research_assistant.pseudocode.preamble.ensure_preamble(<direction>/main.tex, venue_md_path=<venue>/_venue.md)` so the algorithm package (`algorithm + algpseudocode` by default, or `algorithm2e` if the venue opts in) is in the preamble from day one. Idempotent — safe to call on every write.
 - If section given (`intro` / `method` / `results` / `discussion` / ...):
   1. Read `expert.md`, `focused-problem.md`, `experiments/*`, `related-papers/`, and
      any existing `sections/*.tex` for tone + terminology consistency.
@@ -259,6 +260,41 @@ For **experiment-scope** figures (referenced from a paper section discussing
 that experiment), the include path uses `repo/figures/<vN.M>/<slug>.pdf` —
 read the experiment's `versions/<vN.M>.md` `figures:` list (populated by
 `/figure new --scope experiment`) to enumerate.
+
+### Algorithm inclusion
+
+When the section being drafted needs an algorithm (method / approach sections
+almost always do):
+
+1. List `algorithms/*.tex` in the current direction.
+2. If a slug matches a section keyword (read the corresponding `<slug>.note.md`
+   `intent:` field for the match), pick it; otherwise list the available slugs
+   and ask the user. Each algorithm `.tex` is self-contained — it already
+   carries `\begin{algorithm} ... \end{algorithm}`, so the section just
+   `\input{}`s it (no extra wrapping).
+3. Emit the include block exactly in this form:
+
+```latex
+\input{algorithms/<slug>.tex}
+```
+
+   Or, if the section refers to the algorithm in prose without immediately
+   placing it, use `See Algorithm~\ref{alg:<slug>}.` and `\input{...}` the
+   algorithm at the natural reading position.
+
+4. If no matching `algorithms/<slug>.tex` exists, suggest the user runs
+   `/pseudocode new <slug>` first — do not synthesise a placeholder algorithm
+   box. Pseudocode is method-level documentation; it must be authored
+   deliberately, not auto-generated from incomplete context.
+
+5. The required `\usepackage` lines are kept in `main.tex` by
+   `pseudocode.preamble.ensure_preamble(...)` (called during scaffold and on
+   first `/pseudocode new`). No action needed here.
+
+For **experiment-scope** algorithms (referenced from a paper section discussing
+that experiment), the include path is `algorithms/<vN.M>/<slug>.tex`. Surface
+this only when the algorithm is intrinsically tied to one experiment version
+(e.g. an ablated sampler); otherwise prefer the paper-scope variant.
 
 ## Stage 7 — `/paper status [<venue>/<direction>] [--all]`
 

@@ -1,0 +1,31 @@
+% Golden reference: DDPM-style training step, written in algpseudocode.
+% Hand-written; lints clean against research_assistant.pseudocode.lint.
+%
+% This file is the algorithm environment ONLY (no \documentclass / \begin{document}),
+% so paper-architect can \input{} it directly from a section.
+%
+% Notation references (from references/notation.md):
+%   model, gradient, loss, data_loader, learning_rate,
+%   noise_schedule, noisy, denoise
+
+\begin{algorithm}
+\caption{Denoising diffusion training step}
+\label{alg:diffusion-train}
+\begin{algorithmic}[1]
+\Require dataset $\mathcal{D}$, parameters $\theta$, noise schedule $\{\beta_t\}_{t=1}^T$,
+         learning rate $\eta$, total steps $S$
+\Ensure  trained parameters $\theta$
+\For{$s = 1, \dots, S$}
+  \State sample mini-batch $\mathbf{x}_0 \sim \mathcal{D}$
+  \State sample time step $t \sim \mathcal{U}(\{1, \dots, T\})$
+  \State sample noise $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+  \State form noisy sample $\mathbf{x}_t = \sqrt{\bar{\alpha}_t}\, \mathbf{x}_0
+                                              + \sqrt{1 - \bar{\alpha}_t}\, \boldsymbol{\epsilon}$
+       \Comment{closed-form forward step}
+  \State predict $\hat{\boldsymbol{\epsilon}} \leftarrow f_\theta(\mathbf{x}_t, t)$
+  \State $\mathcal{L} \leftarrow \|\boldsymbol{\epsilon} - \hat{\boldsymbol{\epsilon}}\|_2^2$
+  \State $\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}$
+\EndFor
+\State \Return $\theta$
+\end{algorithmic}
+\end{algorithm}
