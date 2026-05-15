@@ -94,6 +94,32 @@ def test_bind_happy_path(fake_dirs):
     assert "_venue.md" in result.venue_files_copied
 
 
+def test_bind_copies_venue_refs_directory(fake_dirs):
+    """`_venue-refs/` alongside `_venue.md` should be copied across bind."""
+    fake_papers, fake_experiments = fake_dirs
+    _make_experiment(fake_experiments, "weightlet-exp")
+    _make_local_paper(fake_papers, "OSDI-2027", "weightlet")
+    exp_venue_dir = fake_experiments / "weightlet-exp" / "repo" / "paper" / "OSDI-2027"
+    exp_venue_dir.mkdir(parents=True)
+    (exp_venue_dir / "_venue.md").write_text(
+        "---\nname: OSDI 2027\n---\n", encoding="utf-8"
+    )
+    (exp_venue_dir / "_venue-refs").mkdir()
+    (exp_venue_dir / "_venue-refs" / "smith-2024-foo.md").write_text(
+        "---\nslug: smith-2024-foo\ntitle: Foo\nadded_at: 2026-05-14\n---\nbody\n",
+        encoding="utf-8",
+    )
+
+    result = binding.bind(
+        venue="OSDI-2027", direction="weightlet", experiment_slug="weightlet-exp"
+    )
+
+    local_refs_dir = fake_papers / "OSDI-2027" / "_venue-refs"
+    assert local_refs_dir.is_dir()
+    assert (local_refs_dir / "smith-2024-foo.md").is_file()
+    assert "_venue-refs" in result.venue_files_copied
+
+
 def test_bind_idempotent_same_experiment(fake_dirs):
     fake_papers, fake_experiments = fake_dirs
     _make_experiment(fake_experiments, "weightlet-exp")

@@ -307,7 +307,7 @@ def _copy_venue_files(
     dst_venue = venue_path(venue)
     dst_venue.mkdir(parents=True, exist_ok=True)
     copied: list[str] = []
-    for name in ("_venue.md", "_template"):
+    for name in ("_venue.md", "_template", "_venue-refs"):
         src = src_venue / name
         if not src.exists():
             continue
