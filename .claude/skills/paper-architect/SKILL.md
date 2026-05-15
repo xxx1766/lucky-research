@@ -230,6 +230,70 @@ user runs status on a freshly cloned machine before remembering to run
    the build (the `.tex` write itself still succeeds).
 8. Print `render_progress_footer(<slug>, None, None)` — venue set, direction pending.
 
+### Sub-stage 1b — `/paper venue refs` (reference-paper writing conventions)
+
+The `_venue.md` written above captures *administrative* facts (deadlines, page
+limit, review rubric). To teach `/paper write` how this venue's prose actually
+*reads*, the user can drop 2–5 reference papers from the target venue and we
+distill their writing conventions into a sentinel-fenced `## Writing
+conventions` block of `_venue.md`.
+
+This is purely additive — refs are optional, the venue stage stays "done"
+without them.
+
+**When to use**
+- The user has a venue cursor set (i.e. Stage 1 already ran).
+- They have 2–5 PDFs from the target venue (under `inputs/papers/`) or arXiv
+  IDs/URLs handy.
+
+**Subcommands**
+- `/paper venue refs add <pdf-or-arxiv>...` — ingest one or more references, then
+  auto-distill.
+- `/paper venue refs list` — table of currently-ingested refs.
+- `/paper venue refs distill` — re-aggregate the `## Writing conventions` block
+  without re-ingesting.
+
+**Workflow for `refs add`**
+1. Resolve venue from `mcp__claude-flow__memory_retrieve(namespace="project/paper-context", key="current")`.
+   If unset, error clearly: "run `/paper venue <slug>` first".
+2. For each source, call `research_assistant.papers.ingest_venue_ref(venue, source, extract_pdf_text=lit.extract_pdf_text, fetch_arxiv=lit.fetch_arxiv, parse_metadata=lit.parse_metadata, analyze=<see prompt below>)`. The helper:
+   - Resolves arXiv id/URL → PDF download into `inputs/papers/` via `lit.fetch_arxiv`.
+   - For local paths under `inputs/papers/`, uses them directly.
+   - Parses metadata, builds a slug, and **skips if `_venue-refs/<slug>.md` already exists** (idempotent — delete the file to force re-analysis).
+3. The `analyze(text, meta)` callable is **you** — read the paper text and produce a `VenueRefAnalysis` JSON object following the **per-paper analysis prompt** below.
+4. After every source is ingested, store each analysis in AgentDB:
+   `mcp__claude-flow__memory_store(namespace="papers/venue-style", key=f"{venue}/{slug}", value=<analysis JSON>, metadata={"year": ..., "venue": venue})`.
+5. Auto-call `distill_venue_conventions(venue, aggregate=<see prompt below>)`.
+6. Print the progress footer — it now shows `· N refs · conventions distilled`.
+
+**Per-paper analysis prompt** (run once per reference paper; emit a JSON object matching `VenueRefAnalysis`)
+1. Identify the **section structure & order** (top-level headings as a list). Flag any non-standard sections (e.g. "Threat Model" in security, "Artifact" in systems).
+2. For each of `{abstract, introduction, method, results, limitations}`: describe the **opening sentence pattern**, **tense** (past/present/mixed), **voice** (active/passive/mixed), and quote **one canonical sentence verbatim** from the paper.
+3. Characterize **citation style**: parenthetical vs textual, density per paragraph (rough average), and integration pattern (e.g. "Prior work [N] establishes...").
+4. Catalogue **figure/equation reference style** (`Fig. N`, `Figure N`, `\Cref{fig:...}`, `(N)` for equations) and **hedging vocabulary** used around result claims ("we observe", "suggests", "achieves", "matches").
+5. Surface **3 notable transition phrases / sentence templates** worth imitating, plus any **anti-patterns** the paper visibly avoids relative to a generic workshop submission.
+6. **Figure style** — call `Read(meta["pdf_abs_path"], pages="1-8")` to see the first 8 pages as rendered images. Describe: typical figure kinds (line plot / bar chart / scatter / architecture diagram), column span (single / double / mixed), subfigure usage (a/b/c pattern), caption pattern (short-title / title+interpretation / narrative), caption tense, palette family (monochrome / few-colors / categorical / sequential), placement (top-of-page / inline / deferred-to-end). Quote one full caption verbatim into `figure_style.canonical_caption`.
+7. **Table style** — from the same `Read` (extend `pages` if no tables appear in the first 8), describe rule style (booktabs / grid / mixed), highlight convention for the best result (bold / underline / shaded-cell / none), units placement (column-header / row-header / inline), significance markers (stars / daggers / none), and the typical comparison-table column layout. Quote one full table caption verbatim into `table_style.canonical_caption`.
+
+Note that step 3 above (running `analyze`) now expects to inspect the PDF visually via the `Read` tool on `meta["pdf_abs_path"]` for the figure/table portion — full text alone is insufficient for visual conventions.
+
+**Aggregation prompt** (run once after all adds; produces the markdown body of the `## Writing conventions` block)
+- Given N `VenueRefAnalysis` blobs, produce markdown with these sub-headings: Section structure, Abstract style, Intro openings, Method narration, Result claims, Citations & in-text figure refs, Figures, Tables, Limitations, Voice, Quotable templates, Do/Don't.
+- For each finding, cite counts when meaningful (e.g. "4/5 papers open intros with a motivating example"). Quote canonical sentences verbatim where they exist.
+- Keep the aggregated block under ~400 lines of markdown — `/paper write` will read it on every draft, so dense > exhaustive.
+
+**Idempotency contract**
+- `refs add` skips by slug — deleting a `_venue-refs/<slug>.md` file is the only way to force re-analysis of that paper.
+- `refs distill` only rewrites the sentinel-fenced block (`<!-- venue-refs:begin -->` … `<!-- venue-refs:end -->`) of `_venue.md`. Anything else in `_venue.md` survives byte-for-byte — manual edits outside the sentinels are safe.
+
+**Memory keys touched**
+- write: `papers/venue-style/<venue>/<paper-slug>`
+- read (on distill): `papers/venue-style/<venue>/*`
+
+**File outputs**
+- `outputs/papers/<venue>/_venue-refs/<paper-slug>.md` — YAML frontmatter (round-trip source) + human-readable body. The frontmatter is authoritative for `distill`.
+- `outputs/papers/<venue>/_venue.md` — gains a `## Writing conventions` section, sentinel-fenced.
+
 ## Stage 2 — `/paper direction <slug>`
 
 **Inputs**
@@ -312,6 +376,34 @@ This stage is **LaTeX-native**: paper prose goes into `.tex` files that build to
 real PDF via the conference template. Markdown planning artifacts (`outline.md`,
 `focused-problem.md`, `experiments/*.md`) stay Markdown.
 
+**Writing habits (read before drafting any section)**
+
+Always load `references/section-heuristics.md`. It carries the per-section
+do/don't/beat lists adapted from
+[xxx1766's "how to write a paper"](https://xxx1766.github.io/2026/03/19/how-to-write-paper/),
+plus the cross-cutting principles below. Treat it as a *required* prelude — it
+overrides default drafting habits (IMRAD order, "we propose…" openers, etc.).
+
+Cross-cutting principles enforced in this stage:
+
+- **Drafting order is not IMRAD.** The blog's order — and therefore this skill's
+  default — is **figures → method → results → related-work → intro → abstract → title**.
+  Method first because it locks the vocabulary every other section reuses; intro
+  late because its funnel depends on the headline number from results; title last
+  because the abstract narrows what the title can promise.
+- **Title is provisional at outline time, final after abstract stabilises.** Stage 6
+  ends with a `title-revisit` step that re-reads `\title{}` against the now-stable
+  abstract.
+- **Funnel-gate the introduction.** Before drafting `intro`, print a plain-text
+  prompt: `"Funnel check: have you discussed broad → existing → best → limitations
+  → this paper's goal with your advisor? (yes / draft anyway / abort)"`. On
+  `abort`, stop without writing. (Plain text, not `AskUserQuestion` — research
+  picks belong in the chat.)
+- **Banned phrases in intro.** After writing `sections/intro.tex`, grep
+  case-insensitively for `novel`, `first ever`, `first time`, `paradigm-changing`,
+  `paradigm-shifting`, `we propose`. Any hit prints a warning with line numbers —
+  do not auto-rewrite, the user decides.
+
 **Workflow**
 
 - If no section given (first write call):
@@ -323,13 +415,49 @@ real PDF via the conference template. Markdown planning artifacts (`outline.md`,
      - `<direction>/sections/` — empty directory.
      - `<direction>/refs.bib` — empty file.
      - Call `research_assistant.pseudocode.preamble.ensure_preamble(<direction>/main.tex, venue_md_path=<venue>/_venue.md)` so the algorithm package (`algorithm + algpseudocode` by default, or `algorithm2e` if the venue opts in) is in the preamble from day one. Idempotent — safe to call on every write.
+  3. **Surface unmade figures.** Read `outline.md`'s figure table; for every row
+     whose source figure isn't in `figures/` (or, for experiment-scope figures,
+     `repo/figures/<vN.M>/`), print `→ /figure new <slug>` so figures land before
+     Method drafting (figures lock the vocabulary the prose then quotes).
+  4. **Print the recommended next-call sequence** in the blog's order, mapped onto
+     the outline's actual section names. Use the synonym map in
+     `references/section-heuristics.md` (`design`/`approach` → `method` kind,
+     `evaluation`/`eval` → `results` kind, …). Example output:
+     ```
+     Recommended drafting order:
+       1. /paper write design        # method kind
+       2. /paper write evaluation    # results kind
+       3. /paper write related-work
+       4. /paper write discussion
+       5. /paper write intro         # funnel-gated
+       6. /paper write abstract
+       7. /paper write title         # revisit \title{}
+     ```
+     One section per invocation — the skill does not auto-loop.
 - If section given (`intro` / `method` / `results` / `discussion` / ...):
-  1. Read `expert.md`, `focused-problem.md`, `experiments/*`, `related-papers/`, and
-     any existing `sections/*.tex` for tone + terminology consistency.
-  2. Draft `<direction>/sections/<section>.tex`. **Cite directly as `\cite{<slug>}`**
-     (no `[@cite:]` placeholder). `<slug>` should match `papers/<slug>` in AgentDB so
-     `/cite` can resolve it into `refs.bib`.
-  3. Append a `% TODO:` LaTeX comment block listing experiments still needed.
+  1. **Resolve the section's kind** via the synonym map in
+     `references/section-heuristics.md` and read the matching
+     `## section: <kind>` block. If no match, use `## section: default`.
+  2. **Read the cross-cutting block** plus `expert.md`, `focused-problem.md`,
+     `experiments/*`, `related-papers/`, `outline.md`'s block for this section,
+     and any existing `sections/*.tex` for tone + terminology consistency.
+  3. **Intro gate.** If kind is `intro`, run the funnel check above; on `abort`,
+     stop.
+  4. **Title revisit.** If kind is `title`, do not draft a new section file —
+     instead: read the current `\title{}` from `main.tex` and the abstract from
+     `sections/abstract.tex`; propose 3 revised titles (8–12 English words,
+     concise + specific, no banned padding); let the user pick (plain text) or
+     reply with their own; rewrite `\title{...}` in `main.tex`. Skip the `% TODO`
+     block and the figure/algorithm includes (none apply to titles).
+  5. **Draft `<direction>/sections/<section>.tex`.** Prepend the heuristics block's
+     Do / Don't / Beats lists at the top of your reasoning before writing — every
+     paragraph should be traceable to a beat. **Cite directly as `\cite{<slug>}`**
+     (no `[@cite:]` placeholder). `<slug>` should match `papers/<slug>` in AgentDB
+     so `/cite` can resolve it into `refs.bib`.
+  6. **Banned-phrase scan.** If kind is `intro`, after writing the file run
+     `grep -niE 'novel|first ever|first time|paradigm-(changing|shifting)|we propose' sections/intro.tex`
+     and print each hit; suggest a rewrite but leave the file as-is.
+  7. Append a `% TODO:` LaTeX comment block listing experiments still needed.
 - **Auto-render** after every successful section write:
   1. Verify `outputs/papers/<venue>/_template/` exists and is non-empty. If missing,
      print the expected drop location and **skip** the render — the `.tex` write

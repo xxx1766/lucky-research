@@ -174,13 +174,26 @@ def render_progress_footer(
     if not venue:
         return "── no current paper · next: /paper venue <slug> ──"
     if direction is None or status is None:
-        return f"── {venue} · venue set · next: /paper direction <slug> ──"
+        return f"── {venue} · venue set{_venue_refs_suffix(venue)} · next: /paper direction <slug> ──"
     bar, done = _progress_bar(status)
     return (
         f"── {venue} / {direction}   "
         f"[{bar}] {done}/{_BAR_WIDTH}   "
         f"next: {next_suggested(status)} ──"
     )
+
+
+def _venue_refs_suffix(venue: str) -> str:
+    """Lazy-import the venue-refs summary; return ' · N refs[ · conventions distilled]' or ''."""
+    try:
+        from research_assistant.papers.venue_refs import venue_refs_summary
+        summary = venue_refs_summary(venue)
+    except Exception:
+        return ""
+    if summary is None or summary.count == 0:
+        return ""
+    base = f" · {summary.count} ref{'s' if summary.count != 1 else ''}"
+    return f"{base} · conventions distilled" if summary.distilled else base
 
 
 def _state_marker(stage: str, status: StageStatus) -> str:
@@ -274,6 +287,20 @@ from research_assistant.papers.binding import (  # noqa: E402
     sync,
     unbind,
 )
+from research_assistant.papers.venue_conventions import (  # noqa: E402
+    VenueRefAnalysis,
+)
+from research_assistant.papers.venue_refs import (  # noqa: E402
+    VenueRefEntry,
+    VenueRefsSummary,
+    distill_venue_conventions,
+    ingest_venue_ref,
+    list_venue_refs,
+    slugify_paper_ref,
+    venue_ref_path,
+    venue_refs_dir,
+    venue_refs_summary,
+)
 
 __all__ = [
     "AlreadyBoundError",
@@ -283,10 +310,20 @@ __all__ = [
     "DivergedError",
     "NotBoundError",
     "SyncResult",
+    "VenueRefAnalysis",
+    "VenueRefEntry",
+    "VenueRefsSummary",
     "bind",
+    "distill_venue_conventions",
+    "ingest_venue_ref",
     "is_bound",
+    "list_venue_refs",
     "read_binding_from_expert_md",
     "restore",
+    "slugify_paper_ref",
     "sync",
     "unbind",
+    "venue_ref_path",
+    "venue_refs_dir",
+    "venue_refs_summary",
 ]

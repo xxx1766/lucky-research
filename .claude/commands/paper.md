@@ -10,6 +10,13 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
 ## Subcommands
 
 - `/paper venue <slug>` — create or edit the venue folder + `_venue.md` (论文特点和要求).
+- `/paper venue refs add <pdf-or-arxiv>...` — ingest reference papers from the target
+  venue, extract per-paper writing conventions into `_venue-refs/<slug>.md`, then
+  auto-distill the `## Writing conventions` block of `_venue.md`. Idempotent on slug.
+- `/paper venue refs list` — table of currently-ingested venue refs and whether the
+  conventions block has been distilled.
+- `/paper venue refs distill` — rebuild the `## Writing conventions` block of
+  `_venue.md` from current `_venue-refs/` contents without re-ingesting anything.
 - `/paper direction <slug>` — open or scope a sub-direction under the current venue.
   Past-work-historian agent seeds the discussion; Claude drafts a starter `expert.md`
   and registers an optional `code_repo:` pointer to the experiment-code GitHub repo.
