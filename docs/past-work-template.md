@@ -8,6 +8,16 @@ tags: [<tag1>, <tag2>]
 links:
   - "arxiv:<id>"
   - "github:<user>/<repo>"
+# Optional GitHub repo binding. Populate via `/past-work bind <slug> <url>`,
+# clone via `/past-work clone <slug>`. Leave the whole block out for prose-only
+# entries (e.g. abandoned ideas, external projects without code).
+#
+# repo:
+#   url: "git@github.com:user/repo.git"
+#   branch: "main"
+#   last_known_sha: null
+#   clone_status: "tracked"       # tracked | cloned | missing
+#   cloned_at: null
 ---
 
 # {{title}}
@@ -33,3 +43,4 @@ links:
 
 - <if I revisit, start from commit abc1234>
 - <the dataset lives at /shared/...>
+- <if a repo is bound, the clone lives at `inputs/past-work/<slug>/repo/`>

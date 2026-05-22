@@ -47,6 +47,22 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
   (recovery path for in-flight projects). Pass `--all` to walk every venue/direction
   and refresh each `status.md`. Auto soft-restores missing symlinks if their
   experiment repos are present locally.
+- `/paper archive [<venue>/<direction>] [--abandoned]` — move a finished paper
+  out of the active `outputs/papers/` tree into
+  `inputs/past-work/<slug>/paper/`, and auto-create (or merge into) a
+  `inputs/past-work/<slug>.md` past-work entry. Refuses if the direction is a
+  symlink (run `/paper unbind` first). The venue-level `_venue.md`,
+  `_template/`, `_venue-refs/` siblings are NOT moved — they stay shared
+  across the venue. Clears the paper-context cursor if it pointed at the
+  archived paper. Pass `--abandoned` to mark the past-work entry as
+  `status: abandoned` rather than `published`.
+- `/paper unarchive <slug>` — reverse `/paper archive`: move
+  `inputs/past-work/<slug>/paper/` back to `outputs/papers/<venue>/<direction>/`.
+  Reads venue/direction from the archived `expert.md` frontmatter (or falls
+  back to the `archived-from:` link in the past-work .md). The past-work
+  `<slug>.md` is left in place — the user can keep or delete it manually.
+- `/paper archive list` — table of every archived paper under
+  `inputs/past-work/*/paper/` (slug, venue, direction, archived-on, has-pdf).
 
 ## Action
 

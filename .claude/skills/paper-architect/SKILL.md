@@ -594,6 +594,64 @@ after a build failure.
    of the log so the user can fix the source.
 5. Print `render_progress_footer(venue, direction, stage_status(direction_dir))`.
 
+## Stage 9 — `/paper archive [<venue>/<direction>] [--abandoned]`
+
+Terminal stage. Moves a finished paper out of the active `outputs/papers/`
+tree and into `inputs/past-work/<slug>/paper/`, while auto-creating (or
+merging into) a sibling `inputs/past-work/<slug>.md` past-work entry. The two
+together let the `past-work-historian` agent surface the paper during future
+`/idea-check` and `/paper direction` recalls — archiving doesn't delete
+anything, it just demotes the paper from "active" to "historical".
+
+**Preconditions**
+- Either `<venue>/<direction>` is passed as an arg, or the cursor in
+  `project/paper-context.current` resolves to a real direction folder.
+- The direction is **not** a symlink. A symlinked direction is bound to an
+  experiment repo via `/paper bind`; archiving the symlink would dangle the
+  link. Refuse with a hint to run `/paper unbind` first.
+
+**Workflow**
+1. Resolve `(venue, direction)`. Print a one-line summary
+   ("about to archive `<venue>/<direction>/` → `inputs/past-work/<slug>/`")
+   so the user can ctrl-C if surprised.
+2. Call `research_assistant.papers.archive_direction(venue, direction,
+   abandoned=<flag>)`. Surface exceptions cleanly:
+   - `ArchiveError("... is a symlink ...")` → user runs `/paper unbind` first.
+   - `ArchiveError("no such direction ...")` → user typo'd or the cursor is stale.
+3. The helper:
+   - Computes `slug = slugify(f"{venue}-{direction}")` (collision-safe — picks
+     `<slug>-2`, `<slug>-3`, ... if the companion folder is taken).
+   - Pulls the title from `expert.md` frontmatter or `main.tex` `\title{...}`.
+   - Pulls the abstract from `main.tex` `\begin{abstract}` (or
+     `sections/abstract.tex`) if present.
+   - Reads any `experiment:` binding from `expert.md` and stamps it as
+     `experiment:<slug>` in the new past-work entry's `links:` list.
+   - Moves the direction tree to `inputs/past-work/<slug>/paper/`.
+   - Appends `archived: <YYYY-MM-DD>` to the moved `status.md` (or creates one).
+   - Writes / merges `inputs/past-work/<slug>.md` — preserves any user prose,
+     fills empty frontmatter fields, dedupes the `links:` list.
+4. Clear the paper-context cursor if it pointed at this paper:
+   `mcp__claude-flow__memory_store(namespace="project/paper-context",
+   key="current", value={venue: null, direction: null})`.
+5. Print the `ArchiveResult` (slug, destination paths, entry-created vs merged).
+6. Print `render_progress_footer(None, None, None)` — no current paper.
+
+**`/paper unarchive <slug>`** — reverse the move. Reads `(venue, direction)`
+from the archived `expert.md` frontmatter (or the `archived-from:` link in
+the past-work .md as fallback). Calls
+`research_assistant.papers.unarchive_direction(slug)`. Refuses if
+`outputs/papers/<venue>/<direction>/` already exists. The past-work
+`<slug>.md` is left in place — user keeps or deletes manually.
+
+**`/paper archive list`** — call `research_assistant.papers.list_archived()`
+and print a table of every archived paper (slug, venue, direction,
+archived-on, has-pdf).
+
+**Venue-level files are NOT moved.** `outputs/papers/<venue>/_venue.md`,
+`outputs/papers/<venue>/_template/`, and `outputs/papers/<venue>/_venue-refs/`
+stay where they are — they're shared across every direction in that venue,
+including any future ones the user starts.
+
 ## Outputs
 
 Every artifact named above lives under `outputs/papers/<venue>/<direction>/`. AgentDB

@@ -272,6 +272,14 @@ def set_context(venue: str, direction: str | None) -> None:
 # Lazy imports avoid a circular import: binding.py imports from
 # `research_assistant.papers` (this module) for path helpers, so we re-export
 # after this module finishes defining them.
+from research_assistant.papers.archive import (  # noqa: E402
+    ArchiveError,
+    ArchivedPaper,
+    ArchiveResult,
+    archive_direction,
+    list_archived,
+    unarchive_direction,
+)
 from research_assistant.papers.binding import (  # noqa: E402
     AlreadyBoundError,
     BindError,
@@ -304,6 +312,9 @@ from research_assistant.papers.venue_refs import (  # noqa: E402
 
 __all__ = [
     "AlreadyBoundError",
+    "ArchiveError",
+    "ArchivedPaper",
+    "ArchiveResult",
     "BindError",
     "BindingResult",
     "ConflictError",
@@ -313,15 +324,18 @@ __all__ = [
     "VenueRefAnalysis",
     "VenueRefEntry",
     "VenueRefsSummary",
+    "archive_direction",
     "bind",
     "distill_venue_conventions",
     "ingest_venue_ref",
     "is_bound",
+    "list_archived",
     "list_venue_refs",
     "read_binding_from_expert_md",
     "restore",
     "slugify_paper_ref",
     "sync",
+    "unarchive_direction",
     "unbind",
     "venue_ref_path",
     "venue_refs_dir",
