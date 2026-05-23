@@ -18,8 +18,9 @@ Five MVP capabilities, each exposed as a Skill + slash command:
 | `/mentor`     | `research-mentor`  | 科研导师 / 发展规划 — long-running trajectory tracking, weekly check-ins, path corrections. |
 | `/past-work`  | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; powers recall during `/paper direction` discussions. |
 | `/boss`       | `boss-historian` (agent) | 大老板形象 — capture profile + per-meeting notes under `inputs/boss-profile/`; `/boss show` prints profile + last 3 meetings as pre-report prep. |
-| `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. |
+| `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. Plus `/experiment artifacts list\|register\|scan` for managing per-experiment `external-artifacts.md`. |
 | `/figure`     | `figure-tool`       | 科研绘图 — structural SVG + matplotlib data plots + reference-figure library; scoped to current /paper or /experiment cursor. |
+| `/migrate`    | `migrate-tool`      | 跨机器迁移 — bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude` config) into one zip and restore on a new machine without overwriting existing files. Excludes registered external artifacts (HF base models, …) and records their fetch commands in the archive manifest. |
 
 ## Repository Layout
 
@@ -31,13 +32,15 @@ src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, 
   mentor/                 Trajectory diff + check-in template + past-work + boss-profile
   papers/                 Venue/direction path resolution + stage-status helpers
   experiments/            Slug + semver + repo-state + env-capture + version-registration
+  migrate/                Repo-walk + classify + zip/unzip + per-entry compression + merge policy
   common/io.py            Single source of truth for inputs/outputs paths
 
-.claude/skills/           Six MVP skills (lit-summarize, idea-validate, paper-architect,
-                          ref-manager, research-mentor, experiment-runner) —
-                          Claude-Code-discoverable
-.claude/commands/         Nine slash entry points (/summarize, /idea-check, /paper,
-                          /cite, /convert, /mentor, /past-work, /boss, /experiment)
+.claude/skills/           MVP skills (lit-summarize, idea-validate, paper-architect,
+                          ref-manager, research-mentor, experiment-runner, figure-tool,
+                          migrate-tool, pseudocode-tool) — Claude-Code-discoverable
+.claude/commands/         Slash entry points (/summarize, /idea-check, /paper,
+                          /cite, /convert, /mentor, /past-work, /boss, /experiment,
+                          /figure, /migrate, /pseudocode)
 .claude/agents/           RuFlo V3 framework agents (89 included) + domain agents
                           (past-work-historian, boss-historian)
 
@@ -74,8 +77,13 @@ outputs/experiments/      Per-experiment tree (gitignored, cross-machine sync vi
     results/<vN.M>/...            mirrored result files for /paper to consume
     data/index.md                 data artifact registry (categorized + sha256)
     configs/<vN.M>.requirements.txt  full pip freeze at run time
+    external-artifacts.md         optional — records re-fetchable external artifacts
+                                  (HF base models, …) excluded from /migrate export
     repo/                         optional local clone of the bound GitHub repo
     status.md                     auto-generated 5-stage progress board
+outputs/migrate/         /migrate output (gitignored):
+  migrate-<host>-<ts>.zip         archives produced by /migrate export
+  imports/<stem>.report.md        per-archive import report from /migrate import
 docs/                     Per-feature docs (currently empty)
 tests/                    pytest
 

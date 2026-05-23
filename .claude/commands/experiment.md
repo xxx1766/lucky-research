@@ -48,6 +48,15 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
   [--description "..."]` — append a section to `data/index.md`. `category` is one of
   `trace | dataset | checkpoint | log | plot | other`.
 - `/experiment data list [--category <c>]` — filtered table from `data/index.md`.
+- `/experiment artifacts list` — print this experiment's `external-artifacts.md`
+  (records of externally-reproducible files excluded from `/migrate export`).
+- `/experiment artifacts register <path> --source hf|http|git-lfs|s3|other
+  [--repo <ref>] [--revision <sha>] [--name <short>] [--glob <pat>]
+  [--size <est>] [--fetch-cmd '...']` — append one external-artifact record.
+  Synthesizes a default `fetch-cmd` from `--source` + `--repo` if not given.
+- `/experiment artifacts scan [--threshold <bytes>]` — walk the experiment
+  dir for ≥threshold files (default 1 GiB) not already registered and
+  interactively prompt the user about each one.
 - `/experiment analyze [<vN.M>...]` — cross-version comparison from the mirrored
   `results/` directories. Optionally writes `analysis.md` (user opts in).
 - `/experiment status [<slug>]` — board for the current/given experiment, persisted

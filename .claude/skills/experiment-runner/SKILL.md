@@ -277,6 +277,51 @@ network):
 **`/experiment data list [--category <c>]`** reads `data/index.md`, filters by
 category if given, prints a table.
 
+## Stage 6.5 — `/experiment artifacts list|register|scan`
+
+External artifacts that are reproducible from outside sources (HuggingFace
+base-model shards, downloaded datasets, …) are recorded in
+`outputs/experiments/<slug>/external-artifacts.md` so `/migrate export` can
+exclude them and instead record their re-fetch commands in the migration
+archive's `MANIFEST.json`.
+
+All three subcommands shell out to `python -m research_assistant.migrate
+artifacts <op> --slug <current-slug>` (the cursor is resolved by the skill
+body, not by the CLI).
+
+**`/experiment artifacts list`**: print the current experiment's
+`external-artifacts.md` as a record-by-record summary. No-op if the file is
+absent.
+
+**`/experiment artifacts register <path> --source hf|http|git-lfs|s3|other
+[--repo <ref>] [--revision <sha>] [--name <short>] [--glob <pat>]
+[--size <est>] [--fetch-cmd '...']`**: append one record to the experiment's
+`external-artifacts.md`. The skill body collects any missing required fields
+interactively (plain-text Q&A — no AskUserQuestion per the
+`feedback_decision_ui` memory) before shelling out:
+
+1. Resolve the experiment slug from the cursor.
+2. Default `--name` to the basename of `<path>` if missing.
+3. Default `--glob` to `*` (everything under the path).
+4. Default `--fetch-cmd` is synthesized from `--source` + `--repo`
+   (`huggingface-cli download <repo> --revision <rev> --local-dir
+   <experiment>/<path>` for `hf`; `curl -L` for `http`; `git lfs clone` for
+   `git-lfs`; left as a TODO comment for `other` / `s3` unless explicit).
+5. Shell out: `python -m research_assistant.migrate artifacts register
+   --slug <slug> --name <name> --path <path> ...`.
+6. Print the resulting file path.
+
+**`/experiment artifacts scan [--threshold <bytes>]`**: walk the current
+experiment's directory, prompt the user about every file ≥ threshold
+(default 1 GiB) that isn't already covered by an entry. Same prompt as the
+`/migrate export` flow uses, reachable proactively rather than only at
+export time. Shells out to `python -m research_assistant.migrate artifacts
+scan --slug <slug>`.
+
+These subcommands compose with `/migrate export`: registering artifacts
+once via `/experiment artifacts scan` means future `/migrate export` calls
+silently exclude them and embed the fetch commands in the archive manifest.
+
 ## Stage 7 — `/experiment analyze`
 
 **Inputs**
