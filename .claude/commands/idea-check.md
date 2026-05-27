@@ -16,7 +16,9 @@ The first token may be a subcommand; anything after it is the argument.
 | `/idea-check` (no args) | Print `_index.md` (the vault) + status of the active idea, if any. |
 | `/idea-check "<free-text>"` | Start Stage 1 (Socratic) for a new idea. Walks through subsequent stages with plain-text confirmations between each. |
 | `/idea-check socratic` | Re-enter Stage 1 for the active idea (refine the statement). |
-| `/idea-check scout` | Stage 2 — last-3-years arXiv + WebSearch fallback. |
+| `/idea-check scout` | Stage 2 — last-3-years arXiv + WebSearch fallback. Auto-runs Stage 2.5 contrarian micro-flow at the end. |
+| `/idea-check contrarian` | Stage 2.5 — 4-Q 反其道而行 micro-flow on the active idea (use when you skipped earlier). |
+| `/idea-check contrarian <slug>` | Force re-entry on a specific slug. |
 | `/idea-check evaluate` | Stage 3 — value + feasibility rubric. |
 | `/idea-check venues` | Stage 4 — suggest target venues. |
 | `/idea-check knowledge` | Stage 5 — brain-library index. |

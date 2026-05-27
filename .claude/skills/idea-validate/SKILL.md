@@ -154,6 +154,72 @@ If the user stops here, the idea is durable. They can resume any time via
    — multi-round refine until the user is satisfied.
 9. Offer: `要让 /summarize 把某篇做成完整 summary 吗?` (don't auto-invoke).
 
+### Stage 2.5 — Contrarian micro-flow (反其道而行)
+
+**Goal:** after the user has seen what the last-3-years mainstream is doing,
+ask whether inverting the dominant assumption could win — and, if so, capture
+the inversion as a sibling idea so both framings live alongside each other.
+
+**Auto-triggered** at the end of Stage 2 (right after step 9). Bail by answering
+`skip` / `跳过` to Q1. Re-entry on demand via `/idea-check contrarian` (or
+`/idea-check contrarian <slug>` for a specific idea).
+
+Build a
+`research_assistant.ideas.contrarian.ContrarianTrace(parent_slug=slug,
+parent_statement=manifest.statement)`. Append every Q/A with
+`contrarian.record_turn(trace, q, a)`.
+
+Q1 — mainstream pattern:
+> `最近 3 年这一波 arxiv 工作里最广泛的做法 / 模式是什么? (回答 \`skip\` / \`跳过\` 可以跳过这一步)`
+
+If the answer is `skip` / `跳过`: set `trace.mainstream_pattern = "<skipped>"`,
+`mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/contrarian`
+with `contrarian.to_agentdb_payload(trace)` (audit only), DO NOT touch
+`scout.md`, skip directly to Stage 3.
+
+Q2 — shared assumption:
+> `这些做法共同假设了什么?`
+
+Q3 — inversion:
+> `如果反过来 — 否定这个假设 — 会变成什么样?`
+
+Q4 — win condition:
+> `反过来这条路要赢, 最起码需要什么证据?`
+
+Distill + confirm:
+1. Draft a 1–2 sentence contrarian framing grounded in Q3 + Q4; set
+   `trace.final_statement`.
+2. Show the triple `(proposed sibling slug = <parent>-contrarian, framing)`
+   and ask plain text: `要把这个反向框架立成一个 sibling idea 吗? Y / N / 编辑`.
+3. On `编辑`: take the user's correction as the new `final_statement`, re-show,
+   re-ask.
+
+On `Y` (accept):
+1. `trace.accepted = True`.
+2. `new = registry.create_variant_idea(parent_slug=slug, suffix="contrarian",
+   new_statement=trace.final_statement)`. Sibling slug collisions resolve to
+   `<parent>-contrarian-2`, `-3`, … automatically.
+3. Write `outputs/idea-checks/<new.slug>/contrarian.md` via
+   `contrarian.render_contrarian_md(trace)`.
+4. Append `contrarian.render_scout_appendix(trace)` to the parent's
+   `outputs/idea-checks/<slug>/scout.md`. **Idempotent:** if the file already
+   contains a `## Contrarian framings` section, splice it out (everything from
+   that header to either the next `##` header or EOF) and replace it; never
+   duplicate.
+5. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/contrarian`
+   with `contrarian.to_agentdb_payload(trace)`.
+6. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<new.slug>` with
+   `registry.to_agentdb_payload(new)`.
+7. Print: `Sibling idea: <new.slug>. Switch active idea to it? Y/N`. Only
+   update `project/idea-context.current` if the user picks Y; default stays on
+   the parent.
+
+On `N` (reject): still set `trace.accepted = False`, run steps 4 + 5 above
+(scout.md appendix + AgentDB trace mirror); skip step 2 (no sibling created)
+and step 6 (no sibling payload).
+
+Then proceed to Stage 3 on whichever idea the cursor points at.
+
 ## Stage 3 — Evaluate
 
 **Goal:** score the idea on 5 value axes + 5 feasibility axes; record a verdict.
@@ -273,6 +339,8 @@ venues first.
 | | `ideas/<slug>` (manifest payload) |
 | | `ideas/<slug>/socratic` |
 | | `ideas/<slug>/scout` |
+| | `ideas/<slug>/contrarian` |
+| | `ideas/<slug>-contrarian` (sibling manifest, on accept) |
 | | `ideas/<slug>/evaluation` |
 | | `ideas/<slug>/venues` |
 | | `ideas/<slug>/knowledge` |
@@ -302,10 +370,11 @@ venues first.
 
 * `research_assistant.ideas.slug.slugify`
 * `research_assistant.ideas.socratic.{SocraticTrace, record_turn, render_socratic_md}`
+* `research_assistant.ideas.contrarian.{ContrarianTrace, record_turn, render_contrarian_md, render_scout_appendix, to_agentdb_payload}`
 * `research_assistant.ideas.scout.{scout_recent_papers, render_scout_md, to_agentdb_payload}`
 * `research_assistant.ideas.evaluate.{IdeaEvaluation, IdeaRisk, render_evaluate_md, VALUE_AXES, FEASIBILITY_AXES}`
 * `research_assistant.ideas.venues.{VENUE_REGISTRY, suggest_venues, render_venues_md, VenueMatch}`
 * `research_assistant.ideas.knowledge.{KnowledgeIndex, KnowledgeItem, render_knowledge_md, to_agentdb_payload}`
 * `research_assistant.ideas.status.{stage_status, render_status_md}`
-* `research_assistant.ideas.registry.{IdeaManifest, save_idea, load_idea, update_idea, list_ideas, render_index_md, to_agentdb_payload, reindex_from_disk}`
+* `research_assistant.ideas.registry.{IdeaManifest, save_idea, load_idea, update_idea, list_ideas, render_index_md, to_agentdb_payload, reindex_from_disk, create_variant_idea}`
 * `research_assistant.lit.sourcing.{PaperRef, search_arxiv}`

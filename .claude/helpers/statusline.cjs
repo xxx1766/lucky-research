@@ -615,22 +615,31 @@ function generateStatusline() {
   const lines = [];
 
   // Header
-  // Read version from package.json
-  let pkgVersion = '3.5';
-  try {
-    const pkgPath = path.join(CWD, 'node_modules', '@claude-flow', 'cli', 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-      if (pkg.version) pkgVersion = pkg.version;
-    } else {
-      // Try npx-installed location
-      const npxPkg = path.join(CWD, 'v3', '@claude-flow', 'cli', 'package.json');
-      if (fs.existsSync(npxPkg)) {
-        const pkg = JSON.parse(fs.readFileSync(npxPkg, 'utf-8'));
-        if (pkg.version) pkgVersion = pkg.version;
-      }
+  // ruflo-ver-fix: resolve the installed ruflo version from the running node's install tree
+  // (nvm-safe, no process spawn). Falls back to the legacy @claude-flow/cli
+  // package name and local project installs before giving up.
+  let pkgVersion = 'dev';
+  {
+    const nodeBin = path.dirname(process.execPath);
+    const globalRoot = path.join(nodeBin, '..', 'lib', 'node_modules'); // *nix
+    const winRoot = path.join(nodeBin, 'node_modules');                 // Windows
+    const candidates = [
+      path.join(globalRoot, 'ruflo', 'package.json'),
+      path.join(winRoot, 'ruflo', 'package.json'),
+      path.join(globalRoot, '@claude-flow', 'cli', 'package.json'),
+      path.join(winRoot, '@claude-flow', 'cli', 'package.json'),
+      path.join(CWD, 'node_modules', 'ruflo', 'package.json'),
+      path.join(CWD, 'node_modules', '@claude-flow', 'cli', 'package.json'),
+    ];
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p)) {
+          const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (pkg.version) { pkgVersion = pkg.version; break; }
+        }
+      } catch { /* try next candidate */ }
     }
-  } catch { /* use default */ }
+  }
   let header = c.bold + c.brightPurple + '\u258A RuFlo V' + pkgVersion + ' ' + c.reset;
   header += (swarm.coordinationActive ? c.brightCyan : c.dim) + '\u25CF ' + c.brightCyan + git.name + c.reset;
   if (git.gitBranch) {

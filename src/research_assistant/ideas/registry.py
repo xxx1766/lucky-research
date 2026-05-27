@@ -61,6 +61,7 @@ class IdeaManifest(BaseModel):
     status: IdeaStatus = "captured"
     venue: str | None = None
     verdict: str | None = None
+    parent_idea: str | None = None
     body: str = ""
 
     def with_status(self, new_status: IdeaStatus) -> "IdeaManifest":
@@ -96,6 +97,8 @@ def _render_manifest_md(m: IdeaManifest) -> str:
         fm["venue"] = m.venue
     if m.verdict:
         fm["verdict"] = m.verdict
+    if m.parent_idea:
+        fm["parent_idea"] = m.parent_idea
     body = m.body.strip()
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
     parts = [f"---\n{head}\n---", "", f"# {m.statement}", ""]
@@ -121,6 +124,7 @@ def _parse_manifest_md(text: str) -> IdeaManifest:
         status=fm.get("status", "captured"),
         venue=fm.get("venue"),
         verdict=fm.get("verdict"),
+        parent_idea=fm.get("parent_idea"),
         body=body.strip(),
     )
 
@@ -216,7 +220,53 @@ def to_agentdb_payload(manifest: IdeaManifest) -> dict:
         "status": manifest.status,
         "venue": manifest.venue,
         "verdict": manifest.verdict,
+        "parent_idea": manifest.parent_idea,
     }
+
+
+def create_variant_idea(
+    parent_slug: str,
+    suffix: str,
+    new_statement: str,
+) -> IdeaManifest:
+    """Create a sibling idea derived from ``parent_slug``.
+
+    Used by Stage 2.5 (contrarian micro-flow). The sibling inherits ``area_tags``
+    from the parent, starts at status ``captured``, and records the parent slug
+    in ``parent_idea`` for traceability. The parent manifest is **not** modified.
+
+    Slug collision policy: if ``<parent_slug>-<suffix>`` already exists on disk,
+    append ``-2``, ``-3``, etc. Gives up after 99 attempts.
+
+    The caller (skill prompt) is responsible for writing the sibling's
+    ``contrarian.md`` and for any AgentDB mirroring — this helper only handles
+    the on-disk manifest + ``_index.md`` refresh, matching :func:`save_idea`'s
+    existing contract.
+    """
+    parent = load_idea(parent_slug)
+    base = f"{parent_slug}-{suffix}"
+    slug = base
+    n = 2
+    while idea_dir(slug).exists():
+        slug = f"{base}-{n}"
+        n += 1
+        if n > 99:
+            raise ValueError(
+                f"too many variants of {parent_slug!r} with suffix {suffix!r}"
+            )
+    today = date.today()
+    new = IdeaManifest(
+        slug=slug,
+        created=today,
+        updated=today,
+        statement=new_statement,
+        area_tags=list(parent.area_tags),
+        status="captured",
+        parent_idea=parent_slug,
+        body=f"Contrarian variant of [[{parent_slug}]].",
+    )
+    save_idea(new)
+    return new
 
 
 def reindex_from_disk() -> list[IdeaManifest]:

@@ -69,6 +69,15 @@ VENUE_REGISTRY: list[Venue] = [
           deadline_month=10, page_limit=14),
     Venue(slug="mlsys", name="MLSys", area_tags=["sys", "ml"],
           deadline_month=10, page_limit=10),
+    Venue(slug="socc", name="SoCC", area_tags=["sys"],
+          deadline_month=7, page_limit=14,
+          notes="ACM Symposium on Cloud Computing — cloud / cluster / orchestration friendly; "
+                "retrofit + measurement papers welcomed."),
+    Venue(slug="asplos", name="ASPLOS", area_tags=["sys"],
+          deadline_month=8, page_limit=14,
+          notes="Architectural Support for Programming Languages and Operating Systems — "
+                "cross-cuts arch / OS / PL / runtime; well-suited to runtime + GPU + "
+                "systems-software co-design."),
     # ----- IR / Web / KDD -----
     Venue(slug="kdd", name="KDD", area_tags=["ml", "ir"],
           deadline_month=2, page_limit=9),

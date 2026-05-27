@@ -384,6 +384,13 @@ do/don't/beat lists adapted from
 plus the cross-cutting principles below. Treat it as a *required* prelude — it
 overrides default drafting habits (IMRAD order, "we propose…" openers, etc.).
 
+Always load `references/latex-conventions.md`. It carries the project-wide
+LaTeX style rules (hard rules, math notation, tables and figures, word choice,
+tense, citations, paragraph layout, pre-submission checklist). It applies to
+every section regardless of kind, and to every `.tex` file under
+`outputs/papers/<venue>/<direction>/`. When a venue note in `_venue.md`
+conflicts with a rule in `latex-conventions.md`, project rules win.
+
 Cross-cutting principles enforced in this stage:
 
 - **Drafting order is not IMRAD.** The blog's order — and therefore this skill's
@@ -403,6 +410,24 @@ Cross-cutting principles enforced in this stage:
   case-insensitively for `novel`, `first ever`, `first time`, `paradigm-changing`,
   `paradigm-shifting`, `we propose`. Any hit prints a warning with line numbers —
   do not auto-rewrite, the user decides.
+- **Hard-rule lint (every section).** After writing any `.tex` file in this
+  stage, grep for the three project hard rules (full definitions in
+  `references/latex-conventions.md` section `hard-rules`):
+  * `;` on a line that is not pure LaTeX command and does not contain `\;`
+    spacing and is not inside a `verbatim` / `lstlisting` / `minted` block →
+    warn with line numbers.
+  * `---` anywhere → warn with line numbers.
+  * `--` not matching `\d+--\d+` (numeric range) → warn with line numbers.
+  Print warnings only. Do not auto-rewrite; the user decides.
+- **Chinese translation comments.** When writing or rewriting any English
+  paragraph in a `.tex` file under `outputs/papers/<venue>/<direction>/` (body
+  prose only — skip `algorithms/*.tex`, `refs.bib`, and the preamble), emit
+  the Chinese translation immediately above the paragraph as `%` LaTeX
+  comments. One `%` line per English source line, wrap to similar visual
+  width. If a Chinese comment block already exists above a paragraph you
+  rewrite, update the Chinese to match the new English so the two stay in
+  sync. See `references/latex-conventions.md` section `hard-rules` for the
+  exact shape.
 
 **Workflow**
 

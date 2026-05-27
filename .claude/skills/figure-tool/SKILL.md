@@ -7,6 +7,14 @@ description: Generate research figures — structural SVG (architecture / pipeli
 
 > **Source spec:** `docs/superpowers/specs/2026-05-13-figure-tool-design.md`. Read it before
 > the first invocation in any session.
+>
+> **Required style prelude:** also read
+> `.claude/skills/paper-architect/references/latex-conventions.md` sections
+> `hard-rules` (no `;`, no `---`/`--`) and `tables-and-figures` (vector PDF,
+> grayscale-resilient, ≤6 colors, arrow flow, font size between body and
+> caption, caption answers "what is this"). The rules apply to figure
+> captions, axis labels, legend text, and any text label inside a structural
+> SVG.
 
 ## Mental model
 
@@ -98,6 +106,17 @@ For **kind=structural**:
    - Selected refs as multimodal image inputs.
    - The palette's hex colors and slot names.
    - The intent sentence.
+   - **Project conventions** (from `latex-conventions.md` section `tables-and-figures`):
+     vector-only (no raster embeds), grayscale-resilient (test by removing
+     color — lines stay distinguishable by dash pattern, marker shape, or
+     position), ≤6 colors total consistent within functional modules (same
+     color means the same role across all figures in the paper), arrows flow
+     in one general direction (left-to-right or top-to-bottom), prefer visual
+     encodings over text labels for repeated information, figure text size
+     between body and caption (typically 7–8 pt in two-column).
+   - **Hard rules** for any text inside the SVG (labels, legends,
+     annotations): no `;` as punctuation, no `---` or `--` as prose
+     punctuation. Restructure with commas or split labels.
 2. Decide D2 scaffold opt-in: if structure is genuinely auto-layout (boxes + arrows), generate a `.d2` source first, call `d2.scaffold_to_svg(...)`. If it returns `None`, fall back to raw SVG generation. If success, set `backend: d2-scaffolded`; otherwise `backend: raw-svg`.
 3. Write `<slug>.svg` to the resolved figures dir.
 4. Call `figures.export.export(svg_path)`. On `ExportError`, leave the SVG and tell the user to inspect.
@@ -111,6 +130,16 @@ For **kind=data**:
    - experiment: `outputs/experiments/<exp>/repo/scripts/plot_<slug>.py`
 2. Script header includes a docstring with data source (path / columns / metric) confirmed in Step 1+3.
 3. Script imports `from research_assistant.figures.save import save_all` and uses `matplotlib.style.use(<absolute-path-to-mplstyle>)` for the chosen palette. `save_all` writes **`.pdf` + `.png`** (no `.svg` — for data figures the script itself is the canonical source).
+3a. **Project conventions** (from `latex-conventions.md` section `tables-and-figures`):
+   - Axis labels, legend entries, and tick labels obey hard rules: no `;`, no
+     `---`/`--`.
+   - Math inside labels uses built-in operators (`\arg\max`, `\log`) and
+     `\textrm{}` for multi-letter names (`\textrm{softmax}`).
+   - Use the resolved palette's colors and the palette mplstyle; do not
+     hardcode hex.
+   - Limit visible series to ≤6 and design for grayscale: pair each color
+     with a distinct marker or dash pattern so the figure survives black-and-
+     white printing.
 4. Jupyter-friendly: if the user prefers to iterate in a notebook, develop in Jupyter and export to `.py` via `jupytext --to py <name>.ipynb` or `File → Save As → .py`. The committed `plot_<slug>.py` stays the source of truth; the figure-tool does not generate `.ipynb` files.
 5. Execute the script (Bash: `python <path-to-plot-script>`). Pipe output; if non-zero exit, surface stderr.
 6. Write `<slug>.note.md` via `write_note(...)` with `backend: matplotlib`.
@@ -141,6 +170,16 @@ After every successful `/figure new` and `/figure render`, print exactly:
 * `custom` → `\columnwidth` (let user adjust)
 
 For **experiment scope**, the include path is `repo/figures/<vN.M>/<slug>.pdf` instead.
+
+**Caption rules** (apply when the user pastes the snippet into their `.tex`,
+and again when `/paper write` drafts the surrounding section):
+* The caption answers *what is this*. Let the body text answer *what does it
+  mean*.
+* Hard rules: no `;`, no `---` or `--`. Restructure with commas or split into
+  two sentences.
+* Quantify any claim that the figure shows a `good` or `better` result. State
+  the metric and the magnitude.
+* Define every acronym in the caption on first use within the caption.
 
 ## Reference intake — `/figure ref add`
 

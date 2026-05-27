@@ -6,6 +6,8 @@ outputs/
 ruvector.db
 ruvector.db-shm
 ruvector.db-wal
+agentdb.rvf
+agentdb.rvf.lock
 .swarm/
 
 # --- claude-flow runtime data (logs, sessions, metrics) ---
@@ -16,6 +18,10 @@ ruvector.db-wal
 .claude-flow/learning/
 .claude-flow/security/
 .claude-flow/daemon.pid
+.claude-flow/daemon-state.json
+
+# --- node deps (ruflo / tooling) ---
+node_modules/
 
 # --- Python ---
 __pycache__/
