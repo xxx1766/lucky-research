@@ -342,11 +342,34 @@ def list_entries_with_repo() -> list[tuple[Path, PastWorkRepo | None, bool]]:
 def parse_entry(path: Path) -> PastWorkEntry:
     """Parse a past-work markdown file (YAML frontmatter + body) into a PastWorkEntry.
 
-    Not implemented yet — real body lands with the first real /past-work add or sync.
+    Falls back to the filename stem for ``slug`` when the frontmatter omits it
+    (matches the convention that ``inputs/past-work/<slug>.md`` is the slug).
+    Body below the closing fence is stored verbatim in :attr:`PastWorkEntry.body`.
     """
-    raise NotImplementedError("YAML frontmatter parsing pending real /past-work bodies")
+    from research_assistant.common.frontmatter import parse as parse_fm
+
+    data, body = parse_fm(path)
+    data.setdefault("slug", Path(path).stem)
+    data.setdefault("title", data["slug"])
+    data.setdefault("body", body)
+    return PastWorkEntry.model_validate(data)
 
 
 def to_agentdb_payload(entry: PastWorkEntry) -> dict:
-    """Format a PastWorkEntry for ``mcp__claude-flow__memory_store``."""
-    raise NotImplementedError("AgentDB indexing payload pending real /past-work sync")
+    """Format a PastWorkEntry for ``mcp__claude-flow__memory_store``.
+
+    Returns a flat metadata dict suitable for ``memory_store``'s ``metadata``
+    field — long prose (``body``, ``abstract``) is excluded so the index stays
+    small. ``what_i_learned`` is kept because it's already short bullets.
+    """
+    return {
+        "kind": "past_work",
+        "slug": entry.slug,
+        "title": entry.title,
+        "year": entry.year,
+        "venue": entry.venue,
+        "status": entry.status,
+        "tags": list(entry.tags),
+        "links": list(entry.links),
+        "what_i_learned": list(entry.what_i_learned),
+    }

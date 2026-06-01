@@ -5,7 +5,7 @@ description: Design and run experiments bound to a GitHub repo. Tracks the bound
 
 # experiment-runner
 
-> **STATUS**: stub. Workflow contracts only — real bodies land stage-by-stage.
+> **STATUS**: active. Stage-by-stage rollout substantially complete; see Open TODOs for remaining items.
 
 ## Mental model
 
@@ -371,8 +371,6 @@ indexing is deferred (see Open TODOs).
 
 ## Open TODOs
 
-- [ ] Real frontmatter parser (lands plugin-wide; unblocks `parse_experiment`,
-      `parse_version`, `parse_data_index`).
 - [ ] Per-version AgentDB indexing (`project/experiments/<slug>/versions/<vN.M>`)
       so semantic search can find "the run that hit rouge-L > 0.4".
 - [ ] `/paper scout` querying `project/experiments/` for experiments bound to the

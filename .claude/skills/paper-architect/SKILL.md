@@ -5,7 +5,7 @@ description: Multi-stage paper output flow — venue setup, direction discussion
 
 # paper-architect
 
-> **STATUS**: stub. Workflow contracts only — real bodies land stage-by-stage.
+> **STATUS**: active. Stage-by-stage rollout substantially complete; see Open TODOs for remaining items.
 
 ## Mental model
 
@@ -693,9 +693,6 @@ mentor can detect drift).
 
 ## Open TODOs
 
-- [ ] Real `search_openreview` + `search_arxiv` implementations.
 - [ ] Section-template variants per venue family (NLP / CV / systems).
 - [ ] Coupling between `experiments/results/` and external trackers (deferred).
-- [ ] Real `render_latex` body in `research_assistant.refs` — shell out to tectonic.
-- [ ] Real `scan_tex_cite_keys` body — extract `\cite{...}` keys for `/cite`.
 - [ ] `/mentor add-past-work` UX.

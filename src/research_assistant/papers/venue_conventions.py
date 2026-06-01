@@ -166,13 +166,15 @@ def _has_table_content(ts: TableStyle) -> bool:
 
 
 def _split_frontmatter(text: str) -> str | None:
-    if not text.startswith("---"):
-        return None
-    rest = text[3:].lstrip("\r\n")
-    end = rest.find("\n---")
-    if end == -1:
-        return None
-    return rest[:end].rstrip()
+    """Return the YAML text of the leading frontmatter block, or ``None``.
+
+    Thin wrapper over :func:`research_assistant.common.frontmatter._split` —
+    kept for back-compat with this module's callers.
+    """
+    from research_assistant.common.frontmatter import _split
+
+    split = _split(text)
+    return split[0] if split else None
 
 
 def _render_body(a: VenueRefAnalysis) -> str:

@@ -157,24 +157,59 @@ def rehearsal_path(d: date, report_slug: str) -> Path:
 def parse_profile(path: Path) -> BossProfile:
     """Parse ``inputs/boss-profile/profile.md`` into a :class:`BossProfile`.
 
-    Not implemented yet — lands with the plugin-wide YAML-frontmatter parser
-    decision (see ``research_assistant.mentor.past_work.parse_entry``).
+    YAML frontmatter holds the typed fields; the body below the closing fence
+    is stored verbatim in :attr:`BossProfile.body`.
     """
-    raise NotImplementedError(
-        "YAML frontmatter parsing pending real /boss sync"
-    )
+    from research_assistant.common.frontmatter import parse as parse_fm
+
+    data, body = parse_fm(path)
+    data.setdefault("body", body)
+    return BossProfile.model_validate(data)
 
 
 def parse_meeting(path: Path) -> BossMeeting:
     """Parse one ``inputs/boss-profile/meetings/<date>.md`` into a :class:`BossMeeting`.
 
-    Not implemented yet — lands alongside :func:`parse_profile`.
+    Falls back to the filename stem (``YYYY-MM-DD``) when the frontmatter
+    omits ``date`` — useful when the user creates the file but forgets to set
+    the field. Body is kept verbatim.
     """
-    raise NotImplementedError(
-        "YAML frontmatter parsing pending real /boss sync"
-    )
+    from research_assistant.common.frontmatter import parse as parse_fm
+
+    data, body = parse_fm(path)
+    if "date" not in data:
+        try:
+            data["date"] = date.fromisoformat(Path(path).stem)
+        except ValueError:
+            pass
+    data.setdefault("body", body)
+    return BossMeeting.model_validate(data)
 
 
 def to_agentdb_payload(entry: BossProfile | BossMeeting) -> dict:
-    """Format a :class:`BossProfile` or :class:`BossMeeting` for ``memory_store``."""
-    raise NotImplementedError("AgentDB indexing payload pending real /boss sync")
+    """Format a :class:`BossProfile` or :class:`BossMeeting` for ``memory_store``.
+
+    Returns a flat metadata dict (long prose excluded) plus a ``kind``
+    discriminator the indexer can use to route into ``project/boss/profile``
+    vs. ``project/boss/meetings/<date>``.
+    """
+    if isinstance(entry, BossProfile):
+        return {
+            "kind": "boss_profile",
+            "name": entry.name,
+            "role": entry.role,
+            "research_interests": list(entry.research_interests),
+            "hot_buttons": list(entry.hot_buttons),
+            "sore_spots": list(entry.sore_spots),
+            "communication_style": entry.communication_style,
+        }
+    if isinstance(entry, BossMeeting):
+        return {
+            "kind": "boss_meeting",
+            "date": entry.date.isoformat(),
+            "topic": entry.topic,
+            "mode": entry.mode,
+            "mood": entry.mood,
+            "action_items": list(entry.action_items),
+        }
+    raise TypeError(f"unsupported entry type: {type(entry).__name__}")
