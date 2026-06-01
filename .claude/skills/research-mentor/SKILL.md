@@ -5,7 +5,7 @@ description: Long-running research mentor (科研导师 / 发展规划). Tracks 
 
 # research-mentor
 
-> **STATUS**: stub. Frontmatter + section headers only. Real skill body TBD.
+> **STATUS**: active. `mentor.diff_goals` + `mentor.weekly_checkin_template` are real; AgentDB writes go through the MCP `memory_store` tool.
 
 ## When to use
 

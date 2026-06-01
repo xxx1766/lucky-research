@@ -5,7 +5,7 @@ description: Manage references (BibTeX merge, cite-as-you-write resolution) and 
 
 # ref-manager
 
-> **STATUS**: stub. Frontmatter + section headers only. Real skill body TBD.
+> **STATUS**: active. `research_assistant.refs.merge_bibtex` / `convert_document` / `scan_tex_cite_keys` / `render_latex` all implemented.
 
 ## When to use
 

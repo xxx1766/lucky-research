@@ -5,7 +5,7 @@ description: Summarize research papers (PDF or arXiv) into structured markdown (
 
 # lit-summarize
 
-> **STATUS**: stub. Frontmatter + section headers only. Real skill body TBD.
+> **STATUS**: active. `research_assistant.lit.extract_pdf_text` / `fetch_arxiv` / `parse_metadata` are implemented; Claude generates the structured summary in-skill.
 
 ## When to use
 
