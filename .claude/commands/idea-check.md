@@ -16,10 +16,11 @@ The first token may be a subcommand; anything after it is the argument.
 | `/idea-check` (no args) | Print `_index.md` (the vault) + status of the active idea, if any. |
 | `/idea-check "<free-text>"` | Start Stage 1 (Socratic) for a new idea. Walks through subsequent stages with plain-text confirmations between each. |
 | `/idea-check socratic` | Re-enter Stage 1 for the active idea (refine the statement). |
-| `/idea-check scout` | Stage 2 — last-3-years arXiv + WebSearch fallback. Auto-runs Stage 2.5 contrarian micro-flow at the end. |
+| `/idea-check brainstorm [<situation>]` | Stage 1.5 — escape hatch when Socratic stalls. Picks 2–3 ideation frameworks (from `references/ideation-frameworks.md`, adapted from Orchestra `21-research-ideation/`) and walks diverge → converge → refine. May spawn a sibling idea via `registry.create_variant_idea`. |
+| `/idea-check scout` | Stage 2 — last-3-years arXiv + WebSearch fallback. Includes a 4-bucket `## Gaps from this scout` section (tried / untried / where-broken / future-work). Auto-runs Stage 2.5 contrarian micro-flow at the end. |
 | `/idea-check contrarian` | Stage 2.5 — 4-Q 反其道而行 micro-flow on the active idea (use when you skipped earlier). |
 | `/idea-check contrarian <slug>` | Force re-entry on a specific slug. |
-| `/idea-check evaluate` | Stage 3 — value + feasibility rubric. |
+| `/idea-check evaluate` | Stage 3 — value + feasibility rubric, plus pre-registration block (proxy metric + baseline + target delta) that `/experiment design` reads to pre-fill its Metrics table. |
 | `/idea-check venues` | Stage 4 — suggest target venues. |
 | `/idea-check knowledge` | Stage 5 — brain-library index. |
 | `/idea-check handoff` | Stage 6 — confirm + invoke `/paper`. |
@@ -56,6 +57,7 @@ outputs/idea-checks/
   <slug>/
     idea.md                       # YAML manifest — source of truth on disk
     socratic.md
+    brainstorm.md   (only if /idea-check brainstorm was run)
     scout.md
     evaluate.md
     venues.md
@@ -65,4 +67,4 @@ outputs/idea-checks/
     lineage.md      (legacy)
 ```
 
-AgentDB mirrors: `ideas/<slug>`, `ideas/<slug>/{socratic,scout,evaluation,venues,knowledge,horizontal,lineage}`.
+AgentDB mirrors: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,evaluation,venues,knowledge,horizontal,lineage}`.

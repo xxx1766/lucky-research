@@ -30,12 +30,40 @@ class ScoutedPaper(BaseModel):
     relation_note: str = ""
 
 
+class ScoutGaps(BaseModel):
+    """Consolidated gap analysis over the scouted papers.
+
+    Adapted from Orchestra-Research/AI-Research-SKILLs (MIT)
+    ``0-autoresearch-skill`` Bootstrap step 2 — the four-bucket structure
+    ("what's been tried / what hasn't / where methods break / Discussion
+    future-work pointers"). Claude fills these buckets after Stage 2 step 4
+    cluster + relation notes are written — the buckets are extracted from
+    the same papers, just consolidated up one level.
+
+    Empty lists are fine; the renderer omits empty buckets so the section
+    stays compact when only one bucket has signal.
+    """
+
+    tried: list[str] = Field(default_factory=list)
+    """Approaches the last 3 years have explored (one bullet per cluster)."""
+
+    untried: list[str] = Field(default_factory=list)
+    """Combinations, regimes, or extensions nobody has published yet."""
+
+    where_broken: list[str] = Field(default_factory=list)
+    """Concrete failure modes documented in the scouted papers."""
+
+    future_work: list[str] = Field(default_factory=list)
+    """Discussion-section pointers from the scouted papers (cite by URL)."""
+
+
 class ScoutResult(BaseModel):
     """Aggregate result for a single scout invocation."""
 
     query: str
     year_range: tuple[int, int]
     papers: list[ScoutedPaper] = Field(default_factory=list)
+    gaps: ScoutGaps = Field(default_factory=ScoutGaps)
 
 
 def scout_recent_papers(
@@ -79,7 +107,11 @@ def render_scout_md(result: ScoutResult) -> str:
             "_No arXiv hits. Try a broader query, or fall back to WebSearch for "
             "venues without an arXiv mirror (OSDI/SOSP/ATC/USENIX Security/etc.)._"
         )
-        return "\n".join(lines) + "\n"
+        lines.append("")
+        gap_block = _render_gaps_block(result.gaps)
+        if gap_block:
+            lines.append(gap_block)
+        return "\n".join(lines).rstrip() + "\n"
     grouped = _group_by_year(result.papers)
     for year in sorted(grouped.keys(), reverse=True):
         lines.append(f"## {year}")
@@ -103,6 +135,31 @@ def render_scout_md(result: ScoutResult) -> str:
                     "idea · why it doesn't subsume yours._"
                 )
             lines.append("")
+    gap_block = _render_gaps_block(result.gaps)
+    if gap_block:
+        lines.append(gap_block)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_gaps_block(gaps: ScoutGaps) -> str:
+    """Render the four-bucket Gaps section. Returns ``""`` if all buckets empty."""
+    buckets = [
+        ("Tried in the last 3 years", gaps.tried),
+        ("Not tried yet", gaps.untried),
+        ("Where existing methods break", gaps.where_broken),
+        ("Discussion-section future work", gaps.future_work),
+    ]
+    if not any(items for _, items in buckets):
+        return ""
+    lines = ["## Gaps from this scout", ""]
+    for label, items in buckets:
+        if not items:
+            continue
+        lines.append(f"### {label}")
+        lines.append("")
+        for it in items:
+            lines.append(f"- {it}")
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -115,4 +172,5 @@ def to_agentdb_payload(result: ScoutResult) -> dict:
             {"ref": p.ref.model_dump(), "relation_note": p.relation_note}
             for p in result.papers
         ],
+        "gaps": result.gaps.model_dump(),
     }

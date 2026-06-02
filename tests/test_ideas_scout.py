@@ -8,6 +8,7 @@ import pytest
 from research_assistant.ideas import scout as scout_mod
 from research_assistant.ideas.scout import (
     ScoutedPaper,
+    ScoutGaps,
     ScoutResult,
     default_year_range,
     render_scout_md,
@@ -123,3 +124,66 @@ def test_agentdb_payload_round_trip():
     assert payload["year_range"] == [2023, 2026]
     assert payload["papers"][0]["ref"]["id"] == "a"
     assert payload["papers"][0]["relation_note"] == "note"
+    # Empty gaps still appear in the payload as an empty struct.
+    assert "gaps" in payload
+    assert payload["gaps"]["tried"] == []
+
+
+def test_render_omits_gaps_section_when_all_buckets_empty():
+    result = ScoutResult(
+        query="rag",
+        year_range=(2023, 2026),
+        papers=[ScoutedPaper(ref=_ref("a", 2024))],
+    )
+    md = render_scout_md(result)
+    assert "## Gaps from this scout" not in md
+
+
+def test_render_includes_gaps_section_with_populated_buckets():
+    result = ScoutResult(
+        query="rag",
+        year_range=(2023, 2026),
+        papers=[ScoutedPaper(ref=_ref("a", 2024))],
+        gaps=ScoutGaps(
+            tried=["Dense re-ranking with cross-encoders"],
+            untried=["Re-ranking by per-user feedback signals"],
+            where_broken=["Cross-encoders degrade past 8k context"],
+            future_work=[
+                "Atlas-XL §6: extending to multimodal retrieval (https://x.org/abs/...)"
+            ],
+        ),
+    )
+    md = render_scout_md(result)
+    assert "## Gaps from this scout" in md
+    assert "### Tried in the last 3 years" in md
+    assert "### Not tried yet" in md
+    assert "### Where existing methods break" in md
+    assert "### Discussion-section future work" in md
+    assert "Re-ranking by per-user feedback signals" in md
+    assert "Cross-encoders degrade past 8k context" in md
+
+
+def test_render_omits_empty_buckets_but_keeps_populated_ones():
+    result = ScoutResult(
+        query="rag",
+        year_range=(2023, 2026),
+        papers=[],
+        gaps=ScoutGaps(untried=["Just one bucket has content"]),
+    )
+    md = render_scout_md(result)
+    assert "## Gaps from this scout" in md
+    assert "### Not tried yet" in md
+    assert "### Tried in the last 3 years" not in md
+    assert "### Where existing methods break" not in md
+
+
+def test_gaps_in_agentdb_payload():
+    result = ScoutResult(
+        query="rag",
+        year_range=(2023, 2026),
+        papers=[],
+        gaps=ScoutGaps(tried=["X"], untried=["Y"]),
+    )
+    payload = to_agentdb_payload(result)
+    assert payload["gaps"]["tried"] == ["X"]
+    assert payload["gaps"]["untried"] == ["Y"]

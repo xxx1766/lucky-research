@@ -8,7 +8,9 @@ from research_assistant.ideas.evaluate import (
     VALUE_AXES,
     IdeaEvaluation,
     IdeaRisk,
+    PreRegistration,
     render_evaluate_md,
+    to_experiment_metrics_seed,
 )
 
 
@@ -61,3 +63,54 @@ def test_rationale_appears_inline():
     )
     md = render_evaluate_md(ev)
     assert "no prior work re-ranks by user-specific feedback" in md
+
+
+def test_pre_registration_block_renders_when_set():
+    ev = IdeaEvaluation(
+        verdict="go",
+        pre_registration=PreRegistration(
+            proxy_metric="ROUGE-L on KILT-NQ",
+            baseline_value=0.412,
+            baseline_source="Atlas-XL (2024)",
+            target_delta="+0.03 absolute",
+            notes="run on the held-out KILT slice only",
+        ),
+    )
+    md = render_evaluate_md(ev)
+    assert "## Pre-registration" in md
+    assert "ROUGE-L on KILT-NQ" in md
+    assert "0.412" in md
+    assert "Atlas-XL (2024)" in md
+    assert "+0.03 absolute" in md
+    assert "run on the held-out KILT slice only" in md
+
+
+def test_pre_registration_placeholder_when_missing():
+    ev = IdeaEvaluation(verdict="pivot")
+    md = render_evaluate_md(ev)
+    assert "## Pre-registration" in md
+    assert "Not yet locked" in md
+
+
+def test_to_experiment_metrics_seed_returns_none_without_preregistration():
+    ev = IdeaEvaluation(verdict="pivot")
+    assert to_experiment_metrics_seed(ev) is None
+
+
+def test_to_experiment_metrics_seed_returns_dict_when_locked():
+    ev = IdeaEvaluation(
+        verdict="go",
+        pre_registration=PreRegistration(
+            proxy_metric="val_loss", baseline_value=4.82, target_delta="-0.2",
+        ),
+    )
+    seed = to_experiment_metrics_seed(ev)
+    assert seed is not None
+    assert seed["metric"] == "val_loss"
+    assert seed["baseline_value"] == 4.82
+    assert seed["target_delta"] == "-0.2"
+
+
+def test_to_experiment_metrics_seed_returns_none_when_preregistration_is_empty():
+    ev = IdeaEvaluation(verdict="go", pre_registration=PreRegistration())
+    assert to_experiment_metrics_seed(ev) is None

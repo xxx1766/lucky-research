@@ -142,25 +142,49 @@ inputs/fleet.md                        ← user-maintained fleet manifest (templ
    Otherwise prompt the user (plain text Y/N per `feedback_decision_ui`):
    minor revision (`next_design_version(slug, "minor")`) or major redesign
    (`next_design_version(slug, "major")`).
-2. Interactive narrowing — ask the user:
-   - What's the specific research question?
-   - What's your hypothesis?
+2. **Pre-fill from a bound idea**, if one exists. Read
+   `mcp__claude-flow__memory_retrieve` namespace=`project`
+   key=`paper-context.current` (paper-context holds `{venue, direction}`
+   where `direction` is the idea slug after `/idea-check handoff`). If a
+   direction is present, also read `ideas/<direction>` for the manifest
+   plus `ideas/<direction>/{socratic,evaluation}` for the hypothesis tree
+   and pre-registration:
+   - Hypothesis tree → call
+     `research_assistant.ideas.socratic.to_experiment_hypothesis_seed(trace)`
+     and paste the returned Markdown into `## Hypothesis` instead of the
+     free-text prompt. The user can still edit. Empty seed → fall through
+     to the prompt below.
+   - Pre-registration → call
+     `research_assistant.ideas.evaluate.to_experiment_metrics_seed(ev)`.
+     `None` means the user skipped Stage 3 pre-reg; fall through. Non-None
+     pre-fills the `## Metrics` row (`metric`, "Why it matters" = the
+     pre-reg `notes`, "Target" = `target_delta`) and the
+     `## Success criteria` section (free text: "Improve `<metric>` over
+     `<baseline_source>` (`<baseline_value>`) by at least `<target_delta>`,
+     measured on …"). User can edit.
+3. **Interactive narrowing** — ask the user only for what wasn't pre-filled:
+   - What's the specific research question? (always ask — the design's RQ
+     is usually narrower than the idea's question)
+   - Hypothesis: skip if seeded above; otherwise ask
+     `What's your hypothesis?`
    - Which baselines from `references.md` will you re-run yourself?
-   - What's the smallest result that would confirm/falsify the hypothesis?
-3. Render `docs/experiment-design-template.md` from the answers, populating the
+   - Metric + success criteria: skip if seeded above; otherwise ask
+     `What's the smallest result that would confirm/falsify the hypothesis?`
+4. Render `docs/experiment-design-template.md` from the answers, populating the
    YAML frontmatter (`design_version`, `created_at`, `derived_from`,
    `feasibility_source: null`, `adopted_suggestions: []`); write to
    `design_version_path(slug, version)`.
-4. **Optional hypothesis tree.** If the user's hypothesis decomposes into
-   sub-hypotheses, encourage them to use the `H1 / H1.1 / H1.2` pattern
-   inside the `## Hypothesis` section (the template's HTML comment shows
-   the shape). Adapted from Orchestra-Research/AI-Research-SKILLs (MIT)
-   `0-autoresearch-skill`. Keep the tree shallow; H1.1.2-deep usually
-   means "this should be a new root hypothesis". The pattern is purely
-   notational — no helper enforces it, and `/experiment feasibility`
-   treats `## Hypothesis` as a single preserved block regardless of
-   internal structure.
-5. Print `render_progress_footer(slug, stage_status(slug))`.
+5. **Optional hypothesis tree.** If step 2 already seeded the hypothesis
+   tree from `ideas/<direction>/socratic`, it's already shaped as
+   `H1 / H1.1 / H1.2`. Otherwise, when the user's free-text hypothesis
+   decomposes into sub-hypotheses, encourage the same pattern (the
+   template's HTML comment shows the shape). Adapted from
+   Orchestra-Research/AI-Research-SKILLs (MIT) `0-autoresearch-skill`.
+   Keep the tree shallow; H1.1.2-deep usually means "this should be a
+   new root hypothesis". The pattern is purely notational — no helper
+   enforces it, and `/experiment feasibility` treats `## Hypothesis` as
+   a single preserved block regardless of internal structure.
+6. Print `render_progress_footer(slug, stage_status(slug))`.
 
 ## Stage 3.5 — `/experiment feasibility`
 
