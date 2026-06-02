@@ -175,6 +175,24 @@ search, ONNX embeddings). Skills read/write AgentDB via the `claude-flow` MCP se
 (`memory_store`, `memory_search`). See `.claude-flow/CAPABILITIES.md` for the full
 runtime contract.
 
+### What's project-specific vs. framework
+
+A clean way to read `.claude/` when first cloning:
+
+| Location | Who owns it | Count |
+|---|---|---|
+| `.claude/commands/*.md` (top-level) | **project** — 13 slash entry points | 13 |
+| `.claude/commands/{analysis,automation,github,hooks,monitoring,optimization,sparc}/` | framework — RuFlo V3 defaults | ~80 |
+| `.claude/skills/{lit-summarize,idea-validate,research-swarm,paper-architect,ref-manager,research-mentor,experiment-runner,figure-tool,pseudocode-tool,migrate-tool}/` | **project** — 10 skills behind the slash commands | 10 |
+| `.claude/skills/<everything else>/` (agentdb-*, github-*, sparc-*, swarm-*, v3-*, …) | framework — RuFlo V3 defaults | ~30 |
+| `.claude/agents/{boss-historian,past-work-historian}.md` (top-level) | **project** — 2 domain agents the research-mentor and past-work skills hand off to | 2 |
+| `.claude/agents/<subdirs>/` (analysis/, swarm/, v3/, …) | framework — RuFlo V3 defaults | ~50+ |
+
+If you're reading code to understand "what does lucky-research do", focus on the
+**project** rows. The framework rows are general-purpose plumbing the runtime
+ships with — they're available for anyone who wants them but they're not part of
+the research-assistant per se.
+
 ## Status
 
 All 13 slash commands have working skill bodies and deterministic Python helpers
