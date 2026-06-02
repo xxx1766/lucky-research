@@ -348,7 +348,18 @@ class _FakeCompleted:
         self.returncode = returncode
 
 
-def test_check_repo_updates_drift(monkeypatch):
+@pytest.fixture
+def ssh_agent_loaded(monkeypatch):
+    """Pretend an ssh-agent is running with at least one key loaded.
+
+    Lets tests for ``check_repo_updates`` exercise the post-pre-flight
+    behavior against SSH URLs without depending on the test host's
+    real SSH state.
+    """
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
+
+
+def test_check_repo_updates_drift(monkeypatch, ssh_agent_loaded):
     def fake_run(cmd, **kwargs):
         return _FakeCompleted(stdout="abc123\trefs/heads/main\n")
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -359,7 +370,7 @@ def test_check_repo_updates_drift(monkeypatch):
     assert result["error"] is None
 
 
-def test_check_repo_updates_in_sync(monkeypatch):
+def test_check_repo_updates_in_sync(monkeypatch, ssh_agent_loaded):
     def fake_run(cmd, **kwargs):
         return _FakeCompleted(stdout="abc123\trefs/heads/main\n")
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -369,9 +380,16 @@ def test_check_repo_updates_in_sync(monkeypatch):
     assert result["error"] is None
 
 
-def test_check_repo_updates_handles_git_failure(monkeypatch):
+def test_check_repo_updates_handles_git_failure(monkeypatch, ssh_agent_loaded):
+    # ssh-add (pre-flight) returns 0; git ls-remote (the second call) returns 128.
+    calls = iter([
+        _FakeCompleted(returncode=0),
+        _FakeCompleted(returncode=128, stderr="fatal: repository not found"),
+    ])
+
     def fake_run(cmd, **kwargs):
-        return _FakeCompleted(returncode=128, stderr="fatal: repository not found")
+        return next(calls)
+
     monkeypatch.setattr(subprocess, "run", fake_run)
     result = check_repo_updates("git@github.com:x/y.git", "main")
     assert result["remote_sha"] is None
@@ -379,21 +397,114 @@ def test_check_repo_updates_handles_git_failure(monkeypatch):
     assert "repository not found" in result["error"]
 
 
-def test_check_repo_updates_handles_timeout(monkeypatch):
+def test_check_repo_updates_handles_timeout(monkeypatch, ssh_agent_loaded):
+    # Pre-flight succeeds; ls-remote times out.
+    calls = iter([
+        _FakeCompleted(returncode=0),
+    ])
+
     def fake_run(cmd, **kwargs):
-        raise subprocess.TimeoutExpired(cmd, timeout=15)
+        try:
+            return next(calls)
+        except StopIteration:
+            raise subprocess.TimeoutExpired(cmd, timeout=15)
+
     monkeypatch.setattr(subprocess, "run", fake_run)
     result = check_repo_updates("git@github.com:x/y.git", "main")
     assert result["remote_sha"] is None
     assert "TimeoutExpired" in result["error"]
 
 
-def test_check_repo_updates_handles_missing_git(monkeypatch):
+def test_check_repo_updates_handles_missing_git(monkeypatch, ssh_agent_loaded):
+    # ssh-add OK; git not on PATH for ls-remote.
+    calls = iter([
+        _FakeCompleted(returncode=0),
+    ])
+
     def fake_run(cmd, **kwargs):
-        raise FileNotFoundError("git not on PATH")
+        try:
+            return next(calls)
+        except StopIteration:
+            raise FileNotFoundError("git not on PATH")
+
     monkeypatch.setattr(subprocess, "run", fake_run)
     result = check_repo_updates("git@github.com:x/y.git", "main")
     assert "FileNotFoundError" in result["error"]
+
+
+# ---------- check_repo_updates pre-flight ----------
+
+
+def test_check_repo_updates_ssh_no_agent_socket(monkeypatch):
+    monkeypatch.delenv("SSH_AUTH_SOCK", raising=False)
+    # subprocess.run should NEVER fire — pre-flight exits early.
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("git was called"))
+    result = check_repo_updates("git@github.com:x/y.git", "main")
+    assert result["remote_sha"] is None
+    assert "SSH_AUTH_SOCK" in result["error"]
+    assert "ssh-add" in result["error"]
+
+
+def test_check_repo_updates_ssh_agent_running_but_no_keys(monkeypatch, ssh_agent_loaded):
+    # ssh-add -l returns 1 ("agent running, no keys") — pre-flight should
+    # surface this without calling git.
+    git_called = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["ssh-add", "-l"]:
+            return _FakeCompleted(returncode=1, stderr="The agent has no identities.")
+        git_called.append(cmd)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = check_repo_updates("git@github.com:x/y.git", "main")
+    assert git_called == []
+    assert "no keys loaded" in result["error"]
+    assert "ssh-add" in result["error"]
+
+
+def test_check_repo_updates_https_skips_ssh_preflight(monkeypatch):
+    # HTTPS URLs don't need an agent — pre-flight shouldn't touch SSH state
+    # even when SSH_AUTH_SOCK is unset.
+    monkeypatch.delenv("SSH_AUTH_SOCK", raising=False)
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return _FakeCompleted(stdout="abc123\trefs/heads/main\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = check_repo_updates("https://github.com/x/y.git", "main")
+    assert result["remote_sha"] == "abc123"
+    # ssh-add must never have been called for an HTTPS URL.
+    assert all(c[:1] != ["ssh-add"] for c in calls)
+
+
+def test_check_repo_updates_https_passes_GIT_TERMINAL_PROMPT_zero(monkeypatch):
+    captured: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env") or {}
+        return _FakeCompleted(stdout="abc123\trefs/heads/main\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    check_repo_updates("https://github.com/x/y.git", "main")
+    assert captured["env"].get("GIT_TERMINAL_PROMPT") == "0"
+
+
+def test_check_repo_updates_preflight_ignores_missing_ssh_add(monkeypatch, ssh_agent_loaded):
+    # When ssh-add isn't on PATH, pre-flight should fall through to git
+    # rather than block — non-default keys configured via ~/.ssh/config can
+    # work even when `ssh-add -l` would have said "no keys".
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["ssh-add", "-l"]:
+            raise FileNotFoundError("ssh-add not on PATH")
+        return _FakeCompleted(stdout="abc123\trefs/heads/main\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = check_repo_updates("git@github.com:x/y.git", "main")
+    assert result["remote_sha"] == "abc123"
+    assert result["error"] is None
 
 
 # ---------- mirror_results ----------

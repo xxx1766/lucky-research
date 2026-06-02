@@ -5,7 +5,7 @@ description: Design and run experiments bound to a GitHub repo. Tracks the bound
 
 # experiment-runner
 
-> **STATUS**: active. Stage-by-stage rollout substantially complete; see Open TODOs for remaining items.
+> **STATUS**: active. Stage-by-stage rollout complete (see Open TODOs at the bottom).
 
 ## Mental model
 
@@ -196,8 +196,8 @@ inputs/fleet.md                        ← user-maintained fleet manifest (templ
 1. Build the merged fleet picture:
    - `auto = infer_fleet_from_versions()` — walks every experiment's
      `versions/*.md` for `host:` + `gpu:` frontmatter; dedupes by hostname.
-   - `manual` — parse `inputs/fleet.md` if it exists (inline YAML read in
-     this skill body; `parse_fleet` Python stub deferred).
+   - `manual` — parse `inputs/fleet.md` via
+     `research_assistant.experiments.parsers.parse_fleet` if it exists.
    - Merge: user-supplied takes precedence on hostname collisions.
 2. **Gap detection**. Ask the user (plain text — no AskUserQuestion) if:
    - `auto + manual` is empty;
@@ -262,7 +262,11 @@ network):
 1. Read `manifest.repo.{url, branch, last_known_sha}`.
 2. Call `check_repo_updates(url, branch, last_known_sha)` — returns
    `{remote_sha, local_sha, drift, error}`. Never raises; on git/network failure the
-   `error` key is populated and other fields are nulled.
+   `error` key is populated and other fields are nulled. For SSH-style URLs
+   the helper runs a fast pre-flight (`SSH_AUTH_SOCK` + `ssh-add -l`) so the
+   user sees an actionable hint (`Run: ssh-add ~/.ssh/id_rsa`) instead of a
+   generic 15-second timeout. HTTPS URLs run with `GIT_TERMINAL_PROMPT=0` so
+   missing-credential errors surface immediately too.
 3. If `drift is True`: tell the user the SHA changed and offer to update
    `manifest.last_known_sha` (plain-text Y/N).
 4. Refresh `status.md`, `_index.md`. Print the footer.
@@ -298,7 +302,21 @@ network):
      shape;
    - **refuses to overwrite** an existing `versions/<vN.M>.md` — the raised
      `FileExistsError` surfaces the suggested next semver.
-2. Refresh `_index.md`. Print the footer.
+2. Index the new version into AgentDB so semantic search can find it later
+   (e.g. "the run that hit rouge-L > 0.4"):
+   - `payload = version_indexing_payload(slug, version)`.
+   - `mcp__claude-flow__memory_store(**payload)` — stores at
+     namespace `project/experiments/<slug>/versions`, key `<vN.M>`, with the
+     composed search text as `value` and the flat metrics/commit/result-file
+     dict as `metadata`.
+3. Refresh `_index.md`. Print the footer.
+
+**`/experiment index [--slug <slug>]`** — backfill helper for after
+`ruvector.db` is rebuilt (markdown survives; the index does not):
+1. Call `iter_version_indexing_payloads(slug)` (omit `slug` to sweep every
+   experiment).
+2. For each payload returned, call `mcp__claude-flow__memory_store(**payload)`.
+3. Print a one-line count summary (e.g. `indexed 12 versions across 4 experiments`).
 
 ## Stage 6 — `/experiment data add` / `/experiment data list`
 
@@ -336,10 +354,19 @@ interactively (plain-text Q&A — no AskUserQuestion per the
 1. Resolve the experiment slug from the cursor.
 2. Default `--name` to the basename of `<path>` if missing.
 3. Default `--glob` to `*` (everything under the path).
-4. Default `--fetch-cmd` is synthesized from `--source` + `--repo`
-   (`huggingface-cli download <repo> --revision <rev> --local-dir
-   <experiment>/<path>` for `hf`; `curl -L` for `http`; `git lfs clone` for
-   `git-lfs`; left as a TODO comment for `other` / `s3` unless explicit).
+4. Default `--fetch-cmd` is synthesized from `--source` + `--repo` (and
+   `--revision` where it carries meaning):
+   - `hf` / `huggingface` → `huggingface-cli download <repo> --revision <rev>
+     --local-dir <experiment>/<path>`.
+   - `http` → `curl -L -o <experiment>/<path> <repo>`.
+   - `git-lfs` → `git lfs clone <repo> <experiment>/<path>`.
+   - `s3` → `aws s3 cp <repo> <experiment>/<path>` (adds `--recursive` when
+     `<repo>` ends with `/`; surfaces `--revision` as a trailing
+     `# revision: <rev>` comment since it has no native s3 meaning).
+   - `other` → `# TODO: fetch <repo> into <experiment>/<path>` (with a
+     `# revision: <rev>` comment when given) — the manual command the user
+     will need to write is one edit away rather than blank.
+   - No `--repo` at all → falls back to a manual-fill-in placeholder.
 5. Shell out: `python -m research_assistant.migrate artifacts register
    --slug <slug> --name <name> --path <path> ...`.
 6. Print the resulting file path.
@@ -427,15 +454,18 @@ Every artifact named above lives under `outputs/experiments/<slug>/`. AgentDB si
 - `project/experiment-context` — cursor `{slug}`.
 - `project/experiments/<slug>` — searchable payload (title + tags + papers + design
   preview).
-
-Both written by `init`, `design`, and every `version add`. Per-version AgentDB
-indexing is deferred (see Open TODOs).
+- `project/experiments/<slug>/versions` — one entry per `<vN.M>` with the
+  composed search text (description + metrics + commit + notes excerpt) as
+  the embedded value, plus flat metadata. Written by every `version add`;
+  backfillable via `/experiment index`.
 
 ## Memory keys touched
 
 - `project/experiment-context` — read/write (cursor: `{slug}`).
 - `project/experiments/<slug>` — write (on `init`, `design`, `version add`,
   `feasibility apply`).
+- `project/experiments/<slug>/versions` — write (on `version add` and
+  `/experiment index` backfill).
 - `papers/<paper-slug>` — read (during `scout`, via `memory_retrieve`).
 
 ## Optional commit-style convention
@@ -460,13 +490,4 @@ git workflow. The plugin's own commits stay on conventional commits.
 
 ## Open TODOs
 
-- [ ] Per-version AgentDB indexing (`project/experiments/<slug>/versions/<vN.M>`)
-      so semantic search can find "the run that hit rouge-L > 0.4".
-- [ ] `/paper scout` querying `project/experiments/` for experiments bound to the
-      current `(venue, direction)`.
-- [ ] `/paper write results` reading `outputs/experiments/<slug>/results/<latest>/`
-      directly.
-- [ ] `/mentor` surfacing experiments with no new version in N weeks.
-- [ ] `/experiment sync` SSH-agent / HTTPS-credential pre-flight check before
-      hitting `git ls-remote` (currently relies on the helper's timeout +
-      error-sentinel return).
+_All previously-tracked items shipped. Add new ones here as scope shows up._

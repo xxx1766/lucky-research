@@ -1,6 +1,6 @@
 ---
 name: experiment
-description: Design + run experiments bound to a GitHub repo — init, scout, design, sync, version add, data add, analyze, status
+description: Design + run experiments bound to a GitHub repo — init, scout, design, feasibility [apply], sync, clone, version add/list, data add/list, artifacts list/register/scan, analyze, status, list, show, index
 ---
 
 # /experiment
@@ -66,6 +66,11 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
   the `.tex` directly when the paper is bound to this experiment.
 - `/experiment status [<slug>]` — board for the current/given experiment, persisted
   to `<slug>/status.md`. Adopts `<slug>` as the cursor if given.
+- `/experiment index [--slug <slug>]` — backfill the AgentDB
+  `project/experiments/<slug>/versions` namespace from on-disk
+  `versions/<vN.M>.md` files. Use after `ruvector.db` is rebuilt; the markdown
+  is the source of truth, the index is derived. Omit `--slug` to sweep every
+  experiment.
 - `/experiment list` — refresh + print `outputs/experiments/_index.md`.
 - `/experiment show <slug>` — adopt cursor + print manifest + design preview +
   latest version metrics.

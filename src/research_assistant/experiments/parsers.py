@@ -156,6 +156,8 @@ def to_agentdb_payload(entry: Experiment | Version | DataArtifact) -> dict:
             "metrics": dict(entry.metrics),
             "python": entry.python,
             "cuda": entry.cuda,
+            "result_file": entry.result_file,
+            "mirrored_to": entry.mirrored_to,
         }
     if isinstance(entry, DataArtifact):
         return {
@@ -168,3 +170,81 @@ def to_agentdb_payload(entry: Experiment | Version | DataArtifact) -> dict:
             "produced_by": entry.produced_by,
         }
     raise TypeError(f"unsupported entry type: {type(entry).__name__}")
+
+
+# ---------- per-version indexing ----------
+
+def _version_search_text(v: Version, slug: str) -> str:
+    """Compose the embeddable text for one experiment version.
+
+    The text is what gets ONNX-embedded so semantic search can hit on things
+    like "rouge-L > 0.4" or "ablation where seed jitter mattered". Keep it
+    short, descriptive, and metric-bearing — not a YAML dump.
+    """
+    parts: list[str] = [f"Experiment {slug} version {v.version}: {v.description}"]
+    parts.append(f"Status: {v.status}")
+    if v.commit_sha:
+        parts.append(f"Commit: {v.commit_sha[:12]}")
+    if v.metrics:
+        metric_str = ", ".join(f"{k}={val}" for k, val in v.metrics.items())
+        parts.append(f"Metrics: {metric_str}")
+    if v.seeds:
+        parts.append(f"Seeds: {', '.join(str(s) for s in v.seeds)}")
+    if v.notes:
+        excerpt = v.notes.strip().splitlines()[0][:200]
+        parts.append(f"Notes: {excerpt}")
+    return "\n".join(parts)
+
+
+def version_indexing_payload(slug: str, version: str) -> dict:
+    """Return ``{namespace, key, value, metadata}`` for ``memory_store``.
+
+    The skill prompt calls ``mcp__claude-flow__memory_store(**payload)`` after
+    ``register_version`` writes ``versions/<vN.M>.md``. Splitting the I/O from
+    the call lets tests check the payload shape without mocking MCP.
+
+    Raises :class:`FileNotFoundError` when ``versions/<version>.md`` is missing.
+    """
+    from .paths import version_path
+
+    path = version_path(slug, version)
+    v = parse_version(path)
+    metadata = to_agentdb_payload(v)
+    metadata["slug"] = slug
+    return {
+        "namespace": f"project/experiments/{slug}/versions",
+        "key": v.version,
+        "value": _version_search_text(v, slug),
+        "metadata": metadata,
+    }
+
+
+def iter_version_indexing_payloads(slug: str | None = None) -> list[dict]:
+    """Walk every ``versions/<vN.M>.md`` and emit one indexing payload each.
+
+    Used by ``/experiment index`` for backfill after ``ruvector.db`` is
+    rebuilt (the on-disk markdown survives even when AgentDB is wiped).
+    When ``slug`` is ``None`` sweeps every experiment; otherwise scopes to one.
+    Malformed version files are skipped, matching :func:`parse_data_index`'s
+    tolerance for user-edited registries.
+    """
+    if not _exp.EXPERIMENTS_DIR.is_dir():
+        return []
+    if slug is not None:
+        slugs = [slug]
+    else:
+        slugs = sorted(
+            p.name for p in _exp.EXPERIMENTS_DIR.iterdir()
+            if p.is_dir() and not p.name.startswith(("_", "."))
+        )
+    out: list[dict] = []
+    for s in slugs:
+        versions_dir = _exp.EXPERIMENTS_DIR / s / "versions"
+        if not versions_dir.is_dir():
+            continue
+        for vfile in sorted(versions_dir.glob("v*.md")):
+            try:
+                out.append(version_indexing_payload(s, vfile.stem))
+            except Exception:
+                continue
+    return out

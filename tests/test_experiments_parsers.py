@@ -5,12 +5,14 @@ from datetime import date
 
 import pytest
 
+import research_assistant.experiments as exp
 from research_assistant.experiments import (
     DataArtifact,
     Experiment,
     FeasibilityReport,
     FleetSnapshot,
     Version,
+    iter_version_indexing_payloads,
     parse_data_index,
     parse_design,
     parse_experiment,
@@ -18,6 +20,7 @@ from research_assistant.experiments import (
     parse_fleet,
     parse_version,
     to_agentdb_payload,
+    version_indexing_payload,
 )
 
 
@@ -274,3 +277,146 @@ def test_payload_data_artifact():
 def test_payload_rejects_unknown_type():
     with pytest.raises(TypeError):
         to_agentdb_payload({"not": "valid"})  # type: ignore[arg-type]
+
+
+# ---------- version_indexing_payload ----------
+
+
+def _write_version(versions_dir, name: str, body: str) -> None:
+    versions_dir.mkdir(parents=True, exist_ok=True)
+    (versions_dir / f"{name}.md").write_text(body, encoding="utf-8")
+
+
+def test_version_indexing_payload_shape(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "lora-eval" / "versions", "v1.0",
+        "---\n"
+        "version: v1.0\n"
+        "description: first run\n"
+        "status: completed\n"
+        "commit_sha: abc1234567890def\n"
+        "metrics: {accuracy: 0.83, rouge_l: 0.41}\n"
+        "seeds: [0, 1, 2]\n"
+        "result_file: results/main.json\n"
+        "mirrored_to: results/v1.0/main.json\n"
+        "notes: hit rouge-L target on first try\n"
+        "---\n"
+        "body\n",
+    )
+    p = version_indexing_payload("lora-eval", "v1.0")
+    assert p["namespace"] == "project/experiments/lora-eval/versions"
+    assert p["key"] == "v1.0"
+    # search text contains metric pairs + commit prefix + description
+    assert "lora-eval" in p["value"]
+    assert "v1.0" in p["value"]
+    assert "first run" in p["value"]
+    assert "accuracy=0.83" in p["value"]
+    assert "rouge_l=0.41" in p["value"]
+    assert "abc123456789" in p["value"]   # truncated to 12 chars
+    assert "hit rouge-L target" in p["value"]
+    # metadata is the to_agentdb_payload dict + slug
+    md = p["metadata"]
+    assert md["kind"] == "experiment_version"
+    assert md["slug"] == "lora-eval"
+    assert md["metrics"] == {"accuracy": 0.83, "rouge_l": 0.41}
+    assert md["result_file"] == "results/main.json"
+    assert md["mirrored_to"] == "results/v1.0/main.json"
+
+
+def test_version_indexing_payload_missing_version_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    (tmp_path / "lora-eval" / "versions").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError):
+        version_indexing_payload("lora-eval", "v1.0")
+
+
+def test_version_indexing_payload_omits_empty_optional_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "x" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: bare\nstatus: planned\n---\n",
+    )
+    p = version_indexing_payload("x", "v1.0")
+    # no metrics / seeds / notes / commit → those lines are absent from search text
+    assert "Metrics:" not in p["value"]
+    assert "Seeds:" not in p["value"]
+    assert "Notes:" not in p["value"]
+    assert "Commit:" not in p["value"]
+    # the description is still there
+    assert "bare" in p["value"]
+
+
+# ---------- iter_version_indexing_payloads ----------
+
+
+def test_iter_version_payloads_sweeps_all_experiments(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "alpha" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: a\nstatus: completed\n---\n",
+    )
+    _write_version(
+        tmp_path / "alpha" / "versions", "v2.0",
+        "---\nversion: v2.0\ndescription: a-better\nstatus: completed\n---\n",
+    )
+    _write_version(
+        tmp_path / "beta" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: b\nstatus: completed\n---\n",
+    )
+    out = iter_version_indexing_payloads()
+    keys = [(p["metadata"]["slug"], p["key"]) for p in out]
+    assert keys == [("alpha", "v1.0"), ("alpha", "v2.0"), ("beta", "v1.0")]
+
+
+def test_iter_version_payloads_scoped_to_one_slug(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "alpha" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: a\nstatus: completed\n---\n",
+    )
+    _write_version(
+        tmp_path / "beta" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: b\nstatus: completed\n---\n",
+    )
+    out = iter_version_indexing_payloads("alpha")
+    assert len(out) == 1
+    assert out[0]["metadata"]["slug"] == "alpha"
+
+
+def test_iter_version_payloads_skips_hidden_and_underscore_dirs(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "real" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: r\nstatus: completed\n---\n",
+    )
+    _write_version(
+        tmp_path / "_scratch" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: x\nstatus: completed\n---\n",
+    )
+    _write_version(
+        tmp_path / ".tmp" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: x\nstatus: completed\n---\n",
+    )
+    out = iter_version_indexing_payloads()
+    assert [p["metadata"]["slug"] for p in out] == ["real"]
+
+
+def test_iter_version_payloads_tolerates_malformed_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path)
+    _write_version(
+        tmp_path / "exp" / "versions", "v1.0",
+        "---\nversion: v1.0\ndescription: ok\nstatus: completed\n---\n",
+    )
+    # malformed: missing closing fence
+    (tmp_path / "exp" / "versions" / "v2.0.md").write_text(
+        "---\nversion: v2.0\nNOT A VALID FRONTMATTER",
+        encoding="utf-8",
+    )
+    out = iter_version_indexing_payloads("exp")
+    assert [p["key"] for p in out] == ["v1.0"]
+
+
+def test_iter_version_payloads_empty_when_dir_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(exp, "EXPERIMENTS_DIR", tmp_path / "does-not-exist")
+    assert iter_version_indexing_payloads() == []

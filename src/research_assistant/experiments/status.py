@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .paths import (
-    data_index_path,
     experiment_path,
     latest_feasibility,
     legacy_design_path,
@@ -46,9 +45,6 @@ def stage_status(slug: str) -> ExperimentStatus:
     Uses cheap text heuristics (``"url:"``, ``"papers:"``) rather than YAML
     parsing, matching the deferred-frontmatter-parser policy elsewhere.
     """
-    # data_index_path is unused here but re-exported for tests that import it
-    # alongside other path helpers; reference it to keep the import non-dead.
-    _ = data_index_path
     exp_dir = experiment_path(slug)
     manifest = manifest_path(slug)
     has_manifest = manifest.is_file()

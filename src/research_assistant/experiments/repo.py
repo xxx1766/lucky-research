@@ -7,6 +7,7 @@ tests can monkeypatch it via ``experiments._LARGE_RESULT_BYTES``.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,6 +18,64 @@ from .paths import _guard_under, repo_clone_path, result_path
 
 _GIT_TIMEOUT_S = 15
 _CLONE_TIMEOUT_S = 120
+_SSH_PREFLIGHT_TIMEOUT_S = 2
+
+
+def _is_ssh_url(url: str) -> bool:
+    """True when ``url`` is an SSH-style git remote.
+
+    Matches ``git@host:org/repo.git`` and ``ssh://...`` forms — both need a
+    working ssh-agent for non-interactive ``git ls-remote``.
+    """
+    return url.startswith(("git@", "ssh://"))
+
+
+def _preflight_ssh(url: str) -> str | None:
+    """Return an actionable error message when ssh-agent isn't usable.
+
+    ``None`` means "OK, proceed to git". Without this pre-flight, calling
+    ``git ls-remote`` against an SSH URL when no agent is loaded blocks until
+    ``_GIT_TIMEOUT_S`` then returns a generic ``TimeoutExpired`` — the user
+    sees "network timeout" when the real fix is ``ssh-add ~/.ssh/id_rsa``.
+
+    Heuristics intentionally conservative: when ``ssh-add`` isn't on PATH or
+    reports an unfamiliar exit code, we return ``None`` and let git try
+    (catches edge cases like non-default key paths configured in ``~/.ssh/config``
+    that don't show up in ``ssh-add -l``).
+    """
+    if not _is_ssh_url(url):
+        return None
+    sock = os.environ.get("SSH_AUTH_SOCK", "")
+    if not sock:
+        return (
+            "SSH_AUTH_SOCK is not set; SSH-cloned remotes need an ssh-agent. "
+            "Run: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa"
+        )
+    try:
+        out = subprocess.run(  # noqa: S603 — no shell, fixed argv
+            ["ssh-add", "-l"],
+            capture_output=True, text=True,
+            timeout=_SSH_PREFLIGHT_TIMEOUT_S, check=False,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+    if out.returncode == 1:
+        return (
+            "ssh-agent is running but has no keys loaded. "
+            "Run: ssh-add ~/.ssh/id_rsa"
+        )
+    return None
+
+
+def _git_env() -> dict[str, str]:
+    """Subprocess env where git is non-interactive for HTTPS credential prompts.
+
+    Without ``GIT_TERMINAL_PROMPT=0``, an HTTPS URL whose credentials aren't
+    cached can hang waiting for a username on stdin, exhausting the 15s
+    timeout. Setting it forces git to fail fast with a clear
+    "could not read Username" stderr message.
+    """
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
 
 def check_repo_updates(
@@ -36,11 +95,14 @@ def check_repo_updates(
         "ahead": None,
         "error": None,
     }
+    preflight_error = _preflight_ssh(url)
+    if preflight_error:
+        return {**base, "error": preflight_error}
     try:
         out = subprocess.run(  # noqa: S603 — no shell, fixed argv
             ["git", "ls-remote", url, branch],
             capture_output=True, text=True,
-            timeout=_GIT_TIMEOUT_S, check=False,
+            timeout=_GIT_TIMEOUT_S, check=False, env=_git_env(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
         return {**base, "error": f"{type(e).__name__}: {e}"}

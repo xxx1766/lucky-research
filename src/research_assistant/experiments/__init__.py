@@ -70,6 +70,7 @@ from .models import (  # noqa: E402
     Version,
 )
 from .parsers import (  # noqa: E402
+    iter_version_indexing_payloads,
     list_experiments,
     parse_data_index,
     parse_design,
@@ -78,6 +79,7 @@ from .parsers import (  # noqa: E402
     parse_fleet,
     parse_version,
     to_agentdb_payload,
+    version_indexing_payload,
 )
 from .paths import (  # noqa: E402
     bump_major,
@@ -155,6 +157,7 @@ __all__ = [
     "fleet_input_path",
     "format_semver",
     "infer_fleet_from_versions",
+    "iter_version_indexing_payloads",
     "latest_design",
     "latest_design_path",
     "latest_feasibility",
@@ -187,5 +190,6 @@ __all__ = [
     "stage_status",
     "status_path",
     "to_agentdb_payload",
+    "version_indexing_payload",
     "version_path",
 ]
