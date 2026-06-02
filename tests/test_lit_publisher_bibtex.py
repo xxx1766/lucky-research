@@ -118,13 +118,20 @@ def test_looks_like_bibtex_only_scans_first_1k():
 
 
 class _FakeResp:
-    """Minimal stand-in for the object returned by urlopen()."""
+    """Minimal stand-in for the object returned by urlopen().
+
+    ``read(size=-1)`` mirrors :class:`http.client.HTTPResponse` — the real
+    helper now passes a byte cap, so the fake has to accept it (otherwise
+    the cap-the-read fix from pass 2 trips a TypeError here).
+    """
 
     def __init__(self, body: bytes):
         self._body = body
 
-    def read(self) -> bytes:
-        return self._body
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            return self._body
+        return self._body[:size]
 
     def __enter__(self):
         return self
@@ -276,6 +283,32 @@ def test_browser_invalid_doi_returns_none(monkeypatch):
     # Should bail before any cloakbrowser import.
     monkeypatch.setitem(sys.modules, "cloakbrowser", None)
     assert pb.fetch_bibtex_via_browser("not-a-doi") is None
+
+
+def test_browser_swallows_runtime_exception(monkeypatch):
+    """Tier 3 must not raise on transient Playwright/CloakBrowser errors.
+
+    `page.goto()` can throw `TimeoutError`, navigation errors, DNS / TLS
+    issues — none of these are `ImportError`. The orchestrator only catches
+    `ImportError`, so anything else propagating out of tier 3 would crash
+    `/cite` and `/summarize` on the first flaky publisher fetch.
+    """
+    class _BadBrowser:
+        def __init__(self):
+            self.closed = False
+
+        def new_context(self, extra_http_headers=None):
+            raise RuntimeError("simulated CloakBrowser navigation timeout")
+
+        def close(self):
+            self.closed = True
+
+    fake = types.ModuleType("cloakbrowser")
+    fake.launch = lambda headless=True: _BadBrowser()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "cloakbrowser", fake)
+    # Should return None, not raise. Best-effort cleanup of the browser
+    # handle happens in the finally block.
+    assert pb.fetch_bibtex_via_browser("10.1145/abc") is None
 
 
 # ---------------------------------------------------------------------------

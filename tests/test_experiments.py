@@ -300,13 +300,28 @@ def test_render_progress_footer_fresh():
 
 
 def test_render_progress_footer_with_versions():
+    # Both versions registered AND analysis output present — the analyze
+    # stage flips done only when `/experiment analyze` has actually
+    # produced `analysis.{tex,md}`, not just because there are >=2 versions.
     s = _fresh_status(
         has_manifest=True, has_repo=True, has_design=True,
-        version_count=2, last_version="v1.1",
+        version_count=2, last_version="v1.1", has_analysis=True,
     )
     footer = render_progress_footer("exp", s)
     assert "[#####] 5/5" in footer
     assert "/experiment analyze" in footer
+
+
+def test_analyze_stage_requires_analysis_files():
+    # Bare version_count >= 2 is no longer enough — `has_analysis=False`
+    # keeps the analyze stage open.
+    s = _fresh_status(
+        has_manifest=True, has_repo=True, has_design=True,
+        version_count=2, last_version="v1.1", has_analysis=False,
+    )
+    footer = render_progress_footer("exp", s)
+    # 4/5 stages done (init, scout, design, version) — analyze still pending.
+    assert "4/5" in footer
 
 
 def test_render_progress_board_structure():
@@ -663,6 +678,28 @@ def test_register_version_writes_file(tmp_path, monkeypatch):
     assert "description: baseline run" in text
     assert "hostname: test-host" in text
     assert "python: 3.12.0" in text
+
+
+def test_register_version_preserves_newlines_in_description(tmp_path, monkeypatch):
+    """Multi-line description / notes must survive round-trip through the
+    YAML frontmatter writer + `parse_version` reader. Previously the inline
+    `_emit_yaml_scalar` wrote raw newlines inside `"..."`, which PyYAML
+    folded into spaces — silent data loss.
+    """
+    import yaml
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _stub_env_and_pip(monkeypatch)
+    experiment_path("exp").mkdir()
+    desc = "line 1\nline 2\nline 3"
+    notes = "step a\nstep b"
+    p = register_version("exp", "v1.0", desc, notes=notes)
+    # Read the file back as YAML directly and confirm both fields kept their
+    # newlines.
+    raw = p.read_text()
+    fm_block = raw.split("---", 2)[1]
+    fm = yaml.safe_load(fm_block)
+    assert fm["description"] == desc
+    assert fm["notes"] == notes
 
 
 def test_register_version_refuses_overwrite(tmp_path, monkeypatch):

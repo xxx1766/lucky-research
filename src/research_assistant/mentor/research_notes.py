@@ -140,13 +140,21 @@ def log_path(slug: str) -> Path:
 
 
 def list_projects() -> list[str]:
-    """Return slugs of every project under ``outputs/research-notes/``."""
+    """Return slugs of every project under ``outputs/research-notes/``.
+
+    Only projects with the full triplet on disk (state.yaml + findings.md +
+    log.md) are listed. If an :func:`init_project` crashed mid-write, the
+    partially-created dir is hidden from this listing so callers like
+    ``/mentor project show`` don't blow up trying to read missing files.
+    """
     if not RESEARCH_NOTES_DIR.is_dir():
         return []
     return sorted(
         p.name for p in RESEARCH_NOTES_DIR.iterdir()
         if p.is_dir() and not p.name.startswith(".")
         and (p / "state.yaml").is_file()
+        and (p / "findings.md").is_file()
+        and (p / "log.md").is_file()
     )
 
 
@@ -312,8 +320,11 @@ def append_finding(slug: str, section: str, body: str) -> Path:
         insertion = end_idx
         while insertion > heading_idx + 1 and lines[insertion - 1].strip() == "":
             insertion -= 1
-        prefix = [""] if insertion > heading_idx + 1 else [""]
-        lines = lines[:insertion] + prefix + [body, ""] + lines[insertion:]
+        # Always separate the new paragraph from the heading (or preceding
+        # paragraph) with one blank line. The previous ternary returned the
+        # same `[""]` on both branches — keeping it explicit here so future
+        # readers don't reintroduce the dead branching.
+        lines = lines[:insertion] + [""] + [body, ""] + lines[insertion:]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 

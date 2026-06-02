@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from research_assistant.common.io import EXPERIMENTS_DIR
 from research_assistant.experiments import (
     latest_version,
     list_experiments,
@@ -36,11 +35,11 @@ def find_experiments_for_paper(venue: str, direction: str) -> list[dict]:
 
     Empty list when no experiments exist or none match. Malformed manifests
     are skipped — matches :func:`parse_data_index`'s tolerance for
-    user-edited registries.
+    user-edited registries. ``list_experiments()`` already returns ``[]`` when
+    the experiments dir is missing, so no eager existence check is needed
+    here (and adding one would defeat monkeypatching of
+    ``common.io.EXPERIMENTS_DIR`` in tests).
     """
-    if not EXPERIMENTS_DIR.is_dir():
-        return []
-
     needle = f"{venue}/{direction}"
     bound_primary = read_binding_from_expert_md(venue, direction)
 

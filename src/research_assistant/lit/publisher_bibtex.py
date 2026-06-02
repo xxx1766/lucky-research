@@ -62,6 +62,11 @@ _BIBTEX_HEAD_RE = re.compile(r"^\s*@\w+\s*\{", re.MULTILINE)
 
 _USER_AGENT = "lucky-research/0.0.1 (https://github.com/xxx1766/lucky-research)"
 
+# Cap HTTP body reads so a misbehaving publisher serving multi-MB HTML can't
+# eat memory. BibTeX entries top out at a few KiB even for papers with 30+
+# authors; 64 KiB is generous.
+_MAX_BIBTEX_BYTES = 64 * 1024
+
 
 def normalize_doi(value: str) -> str:
     """Strip ``https://doi.org/`` / ``doi:`` wrappers; return the bare DOI.
@@ -145,7 +150,8 @@ def fetch_bibtex_via_crossref(doi: str, *, timeout: float = 15.0) -> str | None:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            body = resp.read()
+            # Cap the read so a misbehaving server can't memory-bomb us.
+            body = resp.read(_MAX_BIBTEX_BYTES)
     except (urllib.error.URLError, TimeoutError, ConnectionError):
         return None
 
@@ -183,7 +189,9 @@ def fetch_bibtex_via_doi_content_negotiation(doi: str, *, timeout: float = 15.0)
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            body = resp.read()
+            # Cap the read — publishers that refuse content negotiation often
+            # serve a big HTML landing page instead.
+            body = resp.read(_MAX_BIBTEX_BYTES)
     except (urllib.error.URLError, TimeoutError, ConnectionError):
         return None
 
@@ -232,8 +240,10 @@ def fetch_bibtex_via_browser(doi: str, *, timeout: float = 60.0) -> str | None:
     timeout_ms = int(max(1.0, timeout) * 1000)
     url = f"https://doi.org/{bare}"
 
-    browser = launch(headless=True)
+    body: str | None = None
+    browser = None
     try:
+        browser = launch(headless=True)
         context = browser.new_context(
             extra_http_headers={
                 "Accept": "application/x-bibtex",
@@ -250,11 +260,24 @@ def fetch_bibtex_via_browser(doi: str, *, timeout: float = 60.0) -> str | None:
             body = response.text()
         except Exception:  # noqa: BLE001 - cloakbrowser surfaces many shapes
             body = page.content()
+    except ImportError:
+        # Caller (this very function) raises ImportError when cloakbrowser
+        # isn't installed — re-raise so the orchestrator can surface the
+        # install hint on `prefer_browser=True`.
+        raise
+    except Exception:  # noqa: BLE001 - mirror tier 1/2 "never raise" contract
+        # CloakBrowser / Playwright surface many exception types (TimeoutError,
+        # Error, navigation errors, TLS, DNS). The orchestrator and `_main`
+        # treat this tier as best-effort; swallow everything except ImportError
+        # so the cite-as-you-write flow degrades gracefully on transient
+        # browser/network issues.
+        return None
     finally:
-        try:
-            browser.close()
-        except Exception:  # noqa: BLE001 - best-effort cleanup
-            pass
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:  # noqa: BLE001 - best-effort cleanup
+                pass
 
     if not looks_like_bibtex(body):
         return None

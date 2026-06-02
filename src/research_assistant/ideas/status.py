@@ -44,7 +44,11 @@ def stage_status(slug: str) -> StageStatus:
     manifest_status: str | None = None
     try:
         manifest_status = load_idea(slug).status
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError, KeyError):
+        # Treat malformed or missing manifest the same as "no manifest yet":
+        # the on-disk artifacts still drive the checkbox board. Without this
+        # widen, a single hand-edit that corrupts idea.md frontmatter would
+        # crash `/idea-check status` instead of letting the user see and fix.
         pass
 
     def _at_or_past(stage_label: str) -> bool:

@@ -33,8 +33,14 @@ from research_assistant.papers import venue_path
 
 _VENUE_FAMILY: dict[str, str] = {
     # systems — operating systems, distributed systems, networking, arch.
+    # NOTE: bare "USENIX" deliberately omitted — `USENIX-Security-*` is not
+    # a systems venue, and the genuinely systems-y USENIX co-locations
+    # (OSDI, ATC, FAST, NSDI) are listed explicitly. Users targeting a
+    # systems-flavored USENIX venue not in this map can add a
+    # `Family: systems` line to their `_venue.md` (the explicit override is
+    # honored before this prefix lookup).
     "OSDI": "systems", "SOSP": "systems", "NSDI": "systems",
-    "EUROSYS": "systems", "ATC": "systems", "USENIX": "systems",
+    "EUROSYS": "systems", "ATC": "systems",
     "FAST": "systems", "ASPLOS": "systems", "MICRO": "systems",
     "ISCA": "systems", "HPCA": "systems", "MLSYS": "systems",
     "SIGCOMM": "systems", "SOCC": "systems",

@@ -37,6 +37,7 @@ class ExperimentStatus:
     last_version: str | None
     last_sync: datetime | None
     last_feasibility_check: datetime | None
+    has_analysis: bool = False
 
 
 def stage_status(slug: str) -> ExperimentStatus:
@@ -70,6 +71,21 @@ def stage_status(slug: str) -> ExperimentStatus:
         lf = latest_feasibility(slug)
         if lf and lf.is_file():
             last_feasibility_check = datetime.fromtimestamp(lf.stat().st_mtime)
+    # has_analysis: did `/experiment analyze` produce analysis.{tex,md} for
+    # the latest version? Bare `version_count >= 2` is a false positive — the
+    # user can register two runs without ever invoking analyze.
+    has_analysis = False
+    if versions:
+        from .paths import result_path  # local: avoid circular import at module load
+        try:
+            latest_results = result_path(slug, versions[-1])
+        except Exception:  # noqa: BLE001 - tolerate semver/path edge cases
+            latest_results = None
+        if latest_results is not None and latest_results.is_dir():
+            has_analysis = (
+                (latest_results / "analysis.tex").is_file()
+                or (latest_results / "analysis.md").is_file()
+            )
     return ExperimentStatus(
         has_manifest=has_manifest,
         has_repo=has_repo,
@@ -81,6 +97,7 @@ def stage_status(slug: str) -> ExperimentStatus:
         last_version=versions[-1] if versions else None,
         last_sync=last_sync,
         last_feasibility_check=last_feasibility_check,
+        has_analysis=has_analysis,
     )
 
 
@@ -99,7 +116,11 @@ def _stage_done(stage: str, s: ExperimentStatus) -> bool:
     if stage == "version":
         return s.version_count > 0
     if stage == "analyze":
-        return s.version_count >= 2
+        # Real check: did `/experiment analyze` actually produce analysis.tex
+        # or analysis.md for the latest version? (Previously this was a bare
+        # `version_count >= 2` heuristic — registering two runs without ever
+        # running analyze would falsely mark the stage done.)
+        return s.has_analysis
     raise ValueError(f"unknown stage: {stage}")
 
 

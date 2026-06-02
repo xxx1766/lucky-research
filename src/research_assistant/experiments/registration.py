@@ -37,13 +37,24 @@ def _emit_yaml_scalar(v) -> str:
     if not text:
         return '""'
     needs_quote = (
-        any(c in text for c in ':#"\'\n[]{}|>&*!?%`,')
+        any(c in text for c in ':#"\'\n\r\t[]{}|>&*!?%`,')
         or text.strip() != text
         or text in ("null", "true", "false", "yes", "no")
         or text[:1] in "@-"
     )
     if needs_quote:
-        return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        # Escape backslash + double quote first, then replace control chars
+        # with YAML's recognized escape sequences so multi-line values
+        # (description / notes / config_snapshot) round-trip through
+        # PyYAML's double-quoted scalar without losing the line breaks.
+        escaped = (
+            text.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        )
+        return f'"{escaped}"'
     return text
 
 

@@ -443,6 +443,18 @@ def list_archived() -> list[ArchivedPaper]:
                 title = title or (fm.get("title") if isinstance(fm.get("title"), str) else None)
                 venue = venue or (fm.get("venue") if isinstance(fm.get("venue"), str) else None)
                 status = fm.get("status") if isinstance(fm.get("status"), str) else status
+                # Direction is never written to the past-work frontmatter
+                # directly — it survives only in the `archived-from:` link.
+                # Mirror the parse `unarchive_direction` does.
+                if direction is None:
+                    for link in fm.get("links") or []:
+                        if isinstance(link, str) and link.startswith("archived-from:outputs/papers/"):
+                            rest = link.split("archived-from:outputs/papers/", 1)[1]
+                            parts = rest.split("/", 1)
+                            if len(parts) == 2:
+                                venue = venue or parts[0]
+                                direction = parts[1]
+                                break
         # archive marker from status.md
         status_path = paper_subdir / "status.md"
         if status_path.is_file():
