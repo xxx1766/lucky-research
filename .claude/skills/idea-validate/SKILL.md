@@ -38,6 +38,19 @@ Each stage is **re-enterable** via its own subcommand. The cursor at
 `project/idea-context.current` keeps the "active idea" across invocations so
 you never need to retype the slug.
 
+## References (load on demand)
+
+Stable, detail-heavy content lives in `references/` so this SKILL stays scan-
+nable. Each entry below names the file, what it contains, and the stage(s)
+that pull it in:
+
+| File | Contents | Loaded by |
+|---|---|---|
+| `references/socratic-workflow.md` | Stage 1 full step-by-step: the 6 plain-text rounds (problem / why-now / gap-and-claim / failure-mode / past-work-recall / distill-and-confirm), the hypothesis-tree shape (`H1` root, optional `H1.1` children, depth cap), the persistence block (manifest save, AgentDB writes, cursor set), and the downstream contract with `/experiment design`. | Stage 1 (`/idea-check` initial capture, `/idea-check socratic`) |
+| `references/brainstorm-workflow.md` | Stage 1.5 full step-by-step: scope check, the 4 phases (diagnose / diverge / converge / refine), the 4 handoff kinds (`spawn-sibling` / `refine-active` / `park` / `none`), the save block, and the re-entry contract. The 11 frameworks `F1`…`F11` + Selection Guide + convergence filters live in `ideation-frameworks.md` — load both files together. | Stage 1.5 (`/idea-check brainstorm`) |
+| `references/scout-workflow.md` | Stage 2 + 2.5 full step-by-step: arXiv-first scout, the OSDI/SOSP/NSDI/USENIX/CHI/SIGMOD/VLDB WebSearch fallback rule, the 4 gap-consolidation buckets (`tried` / `untried` / `where_broken` / `future_work`), the AgentDB indexing fanout (`papers/<slug>` + `ideas/<slug>/scout`). Plus the Stage 2.5 Contrarian micro-flow auto-trigger (skip-on `跳过`, the 4 questions, accept-vs-reject branches, idempotent scout.md appendix). | Stage 2 (`/idea-check scout`); Stage 2.5 (`/idea-check contrarian`) |
+| `references/ideation-frameworks.md` | The 11 ideation frameworks (`F1`…`F11`) with their workflows + the Selection Guide table mapping user stuck-state to recommended framework set + the convergence filters (explain-it test, problem-first, simplicity, stakeholder check, feasibility) used in Stage 1.5 Phase 3. Adapted from Orchestra-Research/AI-Research-SKILLs MIT `21-research-ideation/`. | Stage 1.5 (alongside `brainstorm-workflow.md`) |
+
 ## Response style (applies to every stage)
 
 `/idea-check` is the place where sycophancy does the most damage — a flat-
@@ -104,79 +117,34 @@ At every `/idea-check ...` invocation that isn't `list` or `show <slug>`:
 **Goal:** distill a free-form idea into one persisted manifest with a 1–2
 sentence statement, area tags, and a slug.
 
-**Plain-text questions, one turn at a time** (per `feedback_decision_ui` memory
-— never use `AskUserQuestion` for research picks). Build a
-`research_assistant.ideas.socratic.SocraticTrace`, append every Q/A with
+**Constraint:** plain-text questions, one turn at a time (per
+`feedback_decision_ui` memory — never `AskUserQuestion`). Build a
+`research_assistant.ideas.socratic.SocraticTrace` and append every Q/A via
 `record_turn(trace, q, a)`.
 
-Round 1 — problem:
-> "用一句话说说你想解决什么问题?"
+Full per-round prompts and the persistence block are in
+`references/socratic-workflow.md`. The 6-round shape:
 
-Round 2 — why now:
-> "为什么这个问题现在值得做? 谁会从答案里受益?"
+1. **Round 1 — problem** (one-sentence problem statement).
+2. **Round 2 — why now** (urgency + beneficiary).
+3. **Round 3 — gap + claim** — collects a **hypothesis tree** (`H1` root,
+   optional `H1.1` children, optional independent `H2` roots; each with an
+   optional one-line `prediction`). Stored as `socratic.Hypothesis`
+   instances in `trace.hypotheses`. The tree flows downstream — `/experiment
+   design` Stage 3 step 2 reads it via
+   `socratic.to_experiment_hypothesis_seed(trace)`.
+4. **Round 4 — failure mode.**
+5. **Round 5 — past-work recall** (invoke `past-work-historian` via the
+   `Agent` tool; record matches as `[[prior-slug]]` in
+   `trace.past_work_refs`).
+6. **Round 6 — distill + confirm** — propose `(slug, area_tags, statement)`,
+   user confirms or edits.
 
-Round 3 — gap + claim (hypothesis tree):
-> "你认为现有方法的关键不足是什么? 你假设的突破点在哪儿?"
-
-This round collects a **hypothesis tree** rather than a single statement —
-adapted from Orchestra-Research/AI-Research-SKILLs (MIT)
-`0-autoresearch-skill` Bootstrap step 3. The model captures:
-
-* The root hypothesis `H1` (the user's distilled claim).
-* Optional sub-hypotheses `H1.1`, `H1.2` — only when the user naturally
-  spawns follow-ups ("and if H1 holds, then X should also hold").
-* Optional independent roots `H2`, `H3` — only when the user explicitly
-  raises a second claim worth testing in parallel.
-* For each hypothesis: a one-line `prediction` (what observation would
-  confirm or falsify it). Predictions stay optional — if the user can't
-  yet name one, leave blank rather than fabricate.
-
-Persist as `socratic.Hypothesis` instances appended to
-`trace.hypotheses`. The id convention is dotted: `H1.1` is a child of `H1`;
-`socratic.Hypothesis` derives `parent` and `depth` from the id (don't
-store parent twice). Keep the tree shallow — `H1.1.1` typically means
-"this is a new root, lift it to H2". The captured tree flows downstream:
-`/experiment design` Stage 3 step 2 reads `ideas/<current>/socratic` via
-`socratic.to_experiment_hypothesis_seed(trace)` and pre-fills the design's
-`## Hypothesis` section.
-
-Round 4 — failure mode:
-> "如果失败,最可能的原因是什么?"
-
-Round 5 — past-work recall (optional but recommended):
-> Invoke the `past-work-historian` agent via the Agent tool to surface
-> relevant prior projects from `project/past-work/`. If matches come back,
-> ask: "这跟你之前的 `<prior-title>` 有什么继承或区别?" — record one or two
-> turn into `trace.past_work_refs` (use `[[prior-slug]]` form).
-
-Round 6 — distill + confirm:
-1. Draft a 1–2 sentence idea statement; pick area tags (subset of
-   `{ml, nlp, cv, sys, db, sec, theory, hci, ir}`); generate the slug via
-   `research_assistant.ideas.slug.slugify(statement)`. Show the user the
-   triple `(slug, area_tags, statement)`.
-2. Ask plain text: `这个表述对吗? Y / 编辑后重写`. If the user revises, set
-   `trace.idea_statement` to the corrected text and re-derive the slug only
-   if the user explicitly asks.
-
-On confirm:
-1. Build `manifest = IdeaManifest(slug, created=today, updated=today,
-   statement, area_tags, body=<one-paragraph context>)`.
-2. `research_assistant.ideas.registry.save_idea(manifest)` — writes
-   `outputs/idea-checks/<slug>/idea.md` AND refreshes `_index.md`.
-3. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>` with
-   `registry.to_agentdb_payload(manifest)`.
-4. Write `outputs/idea-checks/<slug>/socratic.md` via
-   `socratic.render_socratic_md(trace)`.
-5. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/socratic`
-   with `trace.model_dump()`.
-6. `mcp__claude-flow__memory_store` namespace=`project`,
-   key=`idea-context.current` with
-   `{"slug": <slug>, "area_tags": [...], "stage": "captured"}`.
-7. Tell the user: `Idea captured at outputs/idea-checks/<slug>/. Run
-   /idea-check scout to find recent papers.` Then ask: `要现在就继续 scout 吗? Y/N`.
-
-If the user stops here, the idea is durable. They can resume any time via
-`/idea-check show <slug>`.
+**On confirm:** save the manifest via `registry.save_idea(...)`, render
+`socratic.md`, mirror to AgentDB (`ideas/<slug>`, `ideas/<slug>/socratic`,
+`project/idea-context.current`), then offer to continue with
+`/idea-check scout`. The idea is durable from this point; users can resume
+anytime via `/idea-check show <slug>`.
 
 ## Stage 1.5 — Brainstorm (escape hatch)
 
@@ -184,182 +152,100 @@ If the user stops here, the idea is durable. They can resume any time via
 fill the two-sentence test, or the same shape keeps coming back — pick 2–3
 ideation frameworks and walk a structured diverge → converge → refine
 session. Adapted from Orchestra-Research/AI-Research-SKILLs (MIT)
-`21-research-ideation/`. Orchestra keeps brainstorming as a sibling skill
-to its autoresearch orchestrator; we mirror that by keeping it as a
-sibling subcommand to Socratic rather than embedding it in Stage 1.
+`21-research-ideation/`.
 
-Read `references/ideation-frameworks.md` as the prompt prelude. The 11
-framework codes `F1`…`F11` are stable slugs — quote them by code in
-prompts and the trace.
+**Required loads:** `references/brainstorm-workflow.md` AND
+`references/ideation-frameworks.md`. The frameworks file carries `F1`…`F11`
+(stable codes — quote by code in prompts and the trace), the Selection
+Guide table that maps user stuck-state to recommended framework set, and
+the convergence filters. The workflow file carries the 4-phase flow.
 
-**Workflow:**
+**High-level shape** (full step-by-step in `brainstorm-workflow.md`):
 
-1. **Resolve scope.** Require an active idea cursor; refuse with
-   `Run /idea-check "<your idea>" first` if absent. Load the manifest via
-   `registry.load_idea(slug)`.
-2. **Phase 1 — diagnose.** Ask the user one sentence on why they're
-   reaching for brainstorm (plain text — no `AskUserQuestion`):
-   `什么让你卡住了？(参考 Selection Guide 的左列)`. Match the answer
-   against the Selection Guide table and pick 2–3 framework codes. Build
-   a `BrainstormTrace(parent_slug, parent_statement, user_situation,
-   frameworks=[<codes>])`.
-3. **Phase 2 — diverge** (3–6 turns per framework, total ≤ 12 turns).
-   For each chosen framework, run a Q→A→Q sequence using the framework's
-   workflow from the reference file. Append every turn with
-   `brainstorm.record_turn(trace, framework, q, a)`. Capture raw ideas as
-   `brainstorm.add_candidate(trace, framework, pitch)` — aim for 10–20
-   raw candidates total. **Do not filter yet.**
-4. **Phase 3 — converge.** Show the user the candidate list. Apply the
-   filters from the reference file (explain-it test / problem-first /
-   simplicity / stakeholder check / feasibility). Plain-text prompt:
-   `留哪些？(e.g. "1, 3, 5" or "all" or "none")`. Call
-   `brainstorm.converge(trace, keep=[<indices>], kill_reasons={...})`
-   with one-line reasons for the killed candidates.
-5. **Phase 4 — refine.** For the 1–3 survivors, run the two-sentence
-   test (F10) and ask the user what to do:
-   - `spawn-sibling` → call
-     `registry.create_variant_idea(parent_slug=<active>,
-     suffix=<sibling_suffix>, new_statement=<two-sentence pitch>)`.
-     Update `trace.handoff = BrainstormHandoff(kind="spawn-sibling",
-     statement=<pitch>, sibling_suffix=<suffix>)`. Offer to switch the
-     cursor to the new slug (Y/N) — default keeps cursor on parent.
-   - `refine-active` → store the refined statement in
-     `trace.handoff.statement` and tell the user to run
-     `/idea-check socratic` to re-enter Stage 1 with the new framing.
-   - `park` → keep the trace but take no follow-up action. Useful when
-     the survivors are worth remembering for later.
-   - `none` → user ended early; the trace records as far as Phase 3.
-6. **Save.**
-   - Write `outputs/idea-checks/<slug>/brainstorm.md` via
-     `brainstorm.render_brainstorm_md(trace)`.
-   - `mcp__claude-flow__memory_store` namespace=`ideas`,
-     key=`<slug>/brainstorm` with `brainstorm.to_agentdb_payload(trace)`.
-   - If `kind == "spawn-sibling"`, also write the sibling's own files
-     (the helper does the slug allocation; the skill writes the sibling
-     `idea.md` + AgentDB entry exactly as Stage 2.5 Contrarian does).
-7. Print a one-line summary and the natural next step:
-   - `spawn-sibling` → `Sibling idea: <new-slug>. Switch cursor? Y/N`.
-   - `refine-active` → `Refined statement captured. Next: /idea-check
-     socratic` to re-enter Stage 1.
-   - `park` / `none` → `Brainstorm parked. Next: /idea-check scout`.
+1. **Resolve scope** — require an active idea cursor; refuse with
+   `Run /idea-check "<your idea>" first` if absent.
+2. **Phase 1 — diagnose** — one plain-text question on what's stuck;
+   match against Selection Guide; pick 2–3 framework codes; build a
+   `BrainstormTrace`.
+3. **Phase 2 — diverge** — 3–6 turns per framework (total ≤ 12); capture
+   10–20 raw candidates via `brainstorm.add_candidate(...)`. **Don't
+   filter yet.**
+4. **Phase 3 — converge** — apply the reference's filters; user picks
+   which to keep; call `brainstorm.converge(trace, keep=[...],
+   kill_reasons={...})`.
+5. **Phase 4 — refine** — for each survivor, run F10's two-sentence test
+   and route via `trace.handoff` to one of:
+   - `spawn-sibling` → `registry.create_variant_idea(...)`; optionally
+     switch cursor.
+   - `refine-active` → store refined statement; user runs
+     `/idea-check socratic` to re-enter Stage 1.
+   - `park` → keep the trace; no follow-up action.
+   - `none` → user ended early.
+6. **Save** — write `brainstorm.md` via `brainstorm.render_brainstorm_md(...)`,
+   mirror to AgentDB `ideas/<slug>/brainstorm`. For `spawn-sibling`, also
+   write the sibling's files (same shape as Stage 2.5 Contrarian).
+7. **Print summary + next step** keyed off the handoff kind.
 
-**Re-entry.** `/idea-check brainstorm` is safe to call multiple times on
-the same idea — each session writes a new `brainstorm.md` (overwrites
-the prior render; AgentDB key is single per parent). Use when results
-from Stage 2 surface unexpected gaps and you want a fresh angle before
-committing to evaluate.
+**Re-entry:** safe to call multiple times — overwrites prior
+`brainstorm.md`, AgentDB key is single per parent.
 
 ## Stage 2 — Scout (近三年)
 
 **Goal:** ground the discussion in real, recent literature.
 
-1. Load the active idea (`registry.load_idea(slug)`). Confirm with the user:
-   `Search query default: <slug+statement keywords>. Year range default:
-   <last-3-years-inclusive>. Override?` Accept plain-text edits.
-2. Primary source — arXiv: call
-   `research_assistant.ideas.scout.scout_recent_papers(query, year_range,
-   max_results=25)`. This wraps `lit.sourcing.search_arxiv` and
-   returns `ScoutResult`.
-3. Fallback — non-arXiv venues (OSDI, SOSP, NSDI, USENIX ATC, USENIX Security,
-   CHI, SIGMOD, VLDB, etc.): if the idea's area tags include any of
-   `{sys, sec, db, hci}` and arXiv yielded fewer than ~5 hits in that area,
-   invoke Claude's `WebSearch` tool with queries like
-   `<venue> <query> last 3 years site:usenix.org OR site:acm.org`. Wrap
-   results as additional `PaperRef`s and append to `result.papers`.
-4. **Cluster + relation notes** (Claude's reasoning): group papers by sub-topic,
-   then for each paper fill `relation_note` with 2–3 sentences:
-   `What they did. How it relates to your idea. Why it doesn't subsume yours
-   (or does).` Cite by URL + arXiv ID.
-4.5. **Gap consolidation** (Claude's reasoning, adapted from
-   Orchestra-Research/AI-Research-SKILLs MIT `0-autoresearch-skill`
-   Bootstrap step 2). After the per-paper relation notes are written,
-   populate `result.gaps` (a `ScoutGaps` instance) with four buckets:
-   - `tried` — one bullet per cluster of approaches the last 3 years
-     have explored.
-   - `untried` — combinations, regimes, or extensions nobody has
-     published yet (the inversions / missing intersections).
-   - `where_broken` — concrete failure modes documented in the scouted
-     papers (table 5 of paper X, §6.3 of paper Y, etc.).
-   - `future_work` — pointers from the scouted papers' Discussion
-     sections (cite by URL).
-   Empty buckets are fine — `render_scout_md` omits them. Aim for 1–4
-   bullets per non-empty bucket; this is a triage, not an exhaustive list.
-5. Render with `scout.render_scout_md(result)` → write
-   `outputs/idea-checks/<slug>/scout.md`.
-6. For every paper, also `mcp__claude-flow__memory_store` namespace=`papers`,
-   key=`<paper-slug>` so `/paper scout` later can reuse the index.
-   Then `mcp__claude-flow__memory_store` namespace=`ideas`,
-   key=`<slug>/scout` with `scout.to_agentdb_payload(result)`.
-7. `registry.update_idea(slug, status="scouted")`.
-8. Show the cluster overview; ask plain text: `覆盖到了吗? 还要我搜哪个方向?`
-   — multi-round refine until the user is satisfied.
-9. Offer: `要让 /summarize 把某篇做成完整 summary 吗?` (don't auto-invoke).
+Full step-by-step in `references/scout-workflow.md`. High-level:
+
+1. **Load idea + confirm query/year range** — defaults to slug+statement
+   keywords + last-3-years; user can override.
+2. **arXiv primary** — `scout.scout_recent_papers(query, year_range,
+   max_results=25)`.
+3. **Non-arXiv fallback** — when area tags include `{sys, sec, db, hci}`
+   and arXiv yielded < ~5 hits, fall back to `WebSearch` against OSDI /
+   SOSP / NSDI / USENIX / CHI / SIGMOD / VLDB / etc.
+4. **Cluster + relation notes** — 2–3 sentences per paper: *what they
+   did, how it relates, why it doesn't subsume yours*. Cite by URL +
+   arXiv ID.
+5. **Gap consolidation** — populate `result.gaps` (a `ScoutGaps`
+   instance) with four buckets (`tried` / `untried` / `where_broken` /
+   `future_work`). 1–4 bullets each; empty buckets are fine. Adapted
+   from Orchestra-Research/AI-Research-SKILLs MIT `0-autoresearch-skill`.
+6. **Render** `scout.md` via `scout.render_scout_md(result)`.
+7. **Index every paper** under AgentDB `papers/<paper-slug>` (reusable
+   by `/paper scout`); mirror the full result to `ideas/<slug>/scout`.
+8. **Mark scouted** via `registry.update_idea(slug, status="scouted")`.
+9. **Cluster review** — multi-round plain-text refinement until the user
+   is satisfied with coverage. Offer to `/summarize` specific papers
+   (don't auto-invoke).
 
 ### Stage 2.5 — Contrarian micro-flow (反其道而行)
 
-**Goal:** after the user has seen what the last-3-years mainstream is doing,
-ask whether inverting the dominant assumption could win — and, if so, capture
-the inversion as a sibling idea so both framings live alongside each other.
+**Goal:** after the user has seen the last-3-years mainstream, ask
+whether inverting the dominant assumption could win — capture the
+inversion as a sibling idea so both framings live alongside each other.
 
-**Auto-triggered** at the end of Stage 2 (right after step 9). Bail by answering
-`skip` / `跳过` to Q1. Re-entry on demand via `/idea-check contrarian` (or
-`/idea-check contrarian <slug>` for a specific idea).
+**Auto-triggered** at the end of Stage 2 (right after step 9 above).
+Bail by answering `skip` / `跳过` to Q1. Re-entry on demand via
+`/idea-check contrarian` (or `/idea-check contrarian <slug>` for a
+specific idea).
 
-Build a
-`research_assistant.ideas.contrarian.ContrarianTrace(parent_slug=slug,
-parent_statement=manifest.statement)`. Append every Q/A with
-`contrarian.record_turn(trace, q, a)`.
+Full step-by-step in `references/scout-workflow.md` (under "Stage 2.5").
+High-level:
 
-Q1 — mainstream pattern:
-> `最近 3 年这一波 arxiv 工作里最广泛的做法 / 模式是什么? (回答 \`skip\` / \`跳过\` 可以跳过这一步)`
-
-If the answer is `skip` / `跳过`: set `trace.mainstream_pattern = "<skipped>"`,
-`mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/contrarian`
-with `contrarian.to_agentdb_payload(trace)` (audit only), DO NOT touch
-`scout.md`, skip directly to Stage 3.
-
-Q2 — shared assumption:
-> `这些做法共同假设了什么?`
-
-Q3 — inversion:
-> `如果反过来 — 否定这个假设 — 会变成什么样?`
-
-Q4 — win condition:
-> `反过来这条路要赢, 最起码需要什么证据?`
-
-Distill + confirm:
-1. Draft a 1–2 sentence contrarian framing grounded in Q3 + Q4; set
-   `trace.final_statement`.
-2. Show the triple `(proposed sibling slug = <parent>-contrarian, framing)`
-   and ask plain text: `要把这个反向框架立成一个 sibling idea 吗? Y / N / 编辑`.
-3. On `编辑`: take the user's correction as the new `final_statement`, re-show,
-   re-ask.
-
-On `Y` (accept):
-1. `trace.accepted = True`.
-2. `new = registry.create_variant_idea(parent_slug=slug, suffix="contrarian",
-   new_statement=trace.final_statement)`. Sibling slug collisions resolve to
-   `<parent>-contrarian-2`, `-3`, … automatically.
-3. Write `outputs/idea-checks/<new.slug>/contrarian.md` via
-   `contrarian.render_contrarian_md(trace)`.
-4. Append `contrarian.render_scout_appendix(trace)` to the parent's
-   `outputs/idea-checks/<slug>/scout.md`. **Idempotent:** if the file already
-   contains a `## Contrarian framings` section, splice it out (everything from
-   that header to either the next `##` header or EOF) and replace it; never
-   duplicate.
-5. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/contrarian`
-   with `contrarian.to_agentdb_payload(trace)`.
-6. `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<new.slug>` with
-   `registry.to_agentdb_payload(new)`.
-7. Print: `Sibling idea: <new.slug>. Switch active idea to it? Y/N`. Only
-   update `project/idea-context.current` if the user picks Y; default stays on
-   the parent.
-
-On `N` (reject): still set `trace.accepted = False`, run steps 4 + 5 above
-(scout.md appendix + AgentDB trace mirror); skip step 2 (no sibling created)
-and step 6 (no sibling payload).
-
-Then proceed to Stage 3 on whichever idea the cursor points at.
+- Build a `contrarian.ContrarianTrace(parent_slug, parent_statement)`.
+  Append every Q/A via `contrarian.record_turn(trace, q, a)`.
+- **4 questions** in order — Q1 mainstream pattern (skippable with
+  `skip` / `跳过`, which short-circuits to Stage 3 with an audit-only
+  AgentDB mirror), Q2 shared assumption, Q3 inversion, Q4 win condition.
+- **Distill** a 1–2 sentence contrarian framing; show
+  `(<parent>-contrarian, framing)`; ask `Y / N / 编辑`.
+- **On `Y`** — `registry.create_variant_idea(...)` writes the sibling
+  (collisions resolve to `-contrarian-2`, `-3`); write
+  `outputs/idea-checks/<new.slug>/contrarian.md`; idempotently splice
+  `## Contrarian framings` into the parent's `scout.md`; AgentDB mirrors;
+  offer cursor switch (default keeps cursor on parent).
+- **On `N`** — still mirror the trace and the scout.md appendix; no
+  sibling created.
+- Proceed to Stage 3 on whichever idea the cursor points at.
 
 ## Stage 3 — Evaluate
 
