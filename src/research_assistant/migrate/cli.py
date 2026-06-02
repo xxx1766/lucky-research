@@ -105,14 +105,28 @@ def cmd_export(args: argparse.Namespace) -> int:
     if include_claude_config:
         scope.append("claude_config")
 
-    result = scan_repo(
-        repo_root,
-        unregistered_threshold=args.threshold,
-        include_inputs=include_inputs,
-        include_outputs=include_outputs,
-        include_dbs=include_dbs,
-        include_claude_config=include_claude_config,
-    )
+    try:
+        result = scan_repo(
+            repo_root,
+            unregistered_threshold=args.threshold,
+            include_inputs=include_inputs,
+            include_outputs=include_outputs,
+            include_dbs=include_dbs,
+            include_claude_config=include_claude_config,
+        )
+    except ValueError as e:
+        # Most common cause: malformed `external-artifacts.md` in one of the
+        # experiments — surface it as a friendly error with a fix hint
+        # instead of a raw traceback. The exception message from scan.py
+        # already names the experiment and the parse problem.
+        print(f"ERROR: {e}", file=sys.stderr)
+        print(
+            "\nFix the offending external-artifacts.md and re-run /migrate "
+            "export, or run /experiment artifacts list <slug> to inspect "
+            "the current registry shape.",
+            file=sys.stderr,
+        )
+        return 2
 
     if result.excluded_unregistered:
         if args.non_interactive:

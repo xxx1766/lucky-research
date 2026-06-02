@@ -215,12 +215,19 @@ def sync(
     push_out = _run_git(["push"], cwd=repo, timeout=_GIT_PUSH_TIMEOUT_S)
     pushed = push_out.returncode == 0
 
+    # After a local commit, unpushed = pre-fetch `ahead` + 1 (the commit
+    # we just made). Successful push drops the count back to 0. `ahead` was
+    # observed before the commit on purpose — we trust the fetch result and
+    # add the deterministic +1, rather than re-running `_ahead_behind`
+    # post-commit (which would race the network).
+    unpushed = 0 if pushed else ahead + 1
+
     return SyncResult(
         committed=True,
         pushed=pushed,
         commit_sha=commit_sha,
         commit_message=commit_msg,
         diverged=False,
-        ahead_by=ahead + 1 if not pushed else 0,
+        ahead_by=unpushed,
         behind_by=0,
     )

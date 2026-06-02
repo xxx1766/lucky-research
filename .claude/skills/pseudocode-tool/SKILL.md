@@ -24,6 +24,14 @@ if you want the structural analog — this skill mirrors it line-for-line.
      <slug>.pdf                     <slug>.pdf  (standalone preview)
 ```
 
+> **Experiment scope before any version is registered**: when the user
+> drafts an algorithm before `/experiment version add` has been run,
+> `pseudocode.paths.experiment_algorithms_dir(slug, version=None)` returns
+> `repo/algorithms/_unversioned/`. The flow still works — once the user
+> registers a version, new algorithms land under `algorithms/<vN.M>/`, and
+> the `_unversioned/` files stay in place (the user can move them
+> manually if they decide to retroactively pin them to a version).
+
 Two LaTeX packages are supported; the choice is **venue-driven**:
 
 - **`algpseudocode`** (default) — pairs with `algorithm` for the float. Used by

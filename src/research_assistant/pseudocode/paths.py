@@ -42,6 +42,15 @@ def paper_algorithms_dir(venue: str, direction: str) -> Path:
 
 
 def experiment_algorithms_dir(slug: str, *, version: str | None) -> Path:
+    """Return the algorithms directory inside an experiment.
+
+    With ``version`` (e.g. ``"v1.0"``) → ``repo/algorithms/<version>/``.
+    Without it → ``repo/algorithms/_unversioned/`` — the fallback for
+    algorithms drafted *before* the first `/experiment version add`. Once
+    the experiment has versioned runs, callers should always pass an
+    explicit ``version``; ``_unversioned`` files stay where they were and
+    can be moved manually if the user decides to retroactively pin them.
+    """
     base = EXPERIMENTS_DIR / slug / "repo" / "algorithms"
     return base / version if version else base / "_unversioned"
 

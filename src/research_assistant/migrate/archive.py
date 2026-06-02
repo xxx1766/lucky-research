@@ -137,7 +137,20 @@ def is_db_file(rel_path: str) -> bool:
 
 
 def is_db_sidecar(rel_path: str) -> bool:
-    """Whether ``rel_path`` is a ``-shm`` or ``-wal`` sidecar of a tracked DB."""
+    """Whether ``rel_path`` is a ``-shm`` or ``-wal`` sidecar of a tracked DB.
+
+    .. note::
+       Match is **basename-only**: any path whose basename ends in
+       ``-shm`` / ``-wal`` and whose stem matches a known DB
+       (:data:`_DB_BASENAMES`) qualifies, regardless of where it sits in the
+       tree. ``some/random/dir/memory.db-wal`` would be classified as a
+       swarm-DB sidecar — that's intentional because SQLite produces these
+       files next to the DB and we don't want to miss any, but it does mean
+       deliberately-shadowed names elsewhere are also captured. In the
+       canonical repo layout, the only such files live at ``ruvector.db-*``
+       (repo root) and ``.swarm/memory.db-*``; deviations from that are on
+       the user.
+    """
     name = Path(rel_path).name
     for suf in DB_SIDECAR_SUFFIXES:
         if not name.endswith(suf):
