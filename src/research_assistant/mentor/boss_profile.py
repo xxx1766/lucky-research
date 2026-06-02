@@ -44,6 +44,11 @@ class BossProfile(BaseModel):
 
 
 class BossMeeting(BaseModel):
+    # NOTE: `mode` / `duration_min` / `feedback` are forward-compat — accepted
+    # in frontmatter so user-promoted keys don't get rejected, but the
+    # current `docs/boss-meeting-template.md` keeps them in the body. Don't
+    # remove without first checking that no on-disk meeting file populates
+    # them (running parse_meeting over every file in BOSS_MEETINGS_DIR).
     date: date
     topic: str
     mode: str | None = None  # 1:1 | group | email | slack

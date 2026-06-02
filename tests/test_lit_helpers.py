@@ -47,6 +47,51 @@ def test_parse_metadata_returns_dict(tmp_path):
     assert isinstance(meta["authors"], list)
 
 
+def _build_unmetadated_pdf(path: Path, *pages: str) -> Path:
+    """Like _build_pdf, but leaves PDF metadata explicitly empty so the
+    title/author fall through to the `_guess_*` heuristics."""
+    doc = fitz.open()
+    for content in pages:
+        page = doc.new_page()
+        page.insert_text((72, 72), content)
+    # Override the default toolchain metadata: PyMuPDF stamps `creator`/
+    # `producer` automatically, but the user-relevant fields stay blank.
+    doc.set_metadata({"title": "", "author": ""})
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_parse_metadata_falls_back_to_first_line_when_pdf_metadata_blank(tmp_path):
+    # No PDF metadata; first non-empty line is treated as title; the next
+    # comma-separated line is treated as the author list.
+    pdf = _build_unmetadated_pdf(
+        tmp_path / "guess.pdf",
+        "Toward Better Slugs in Research Code\nAlice Doe, Bob Roe, Carol Lin\n"
+        "\n1. Introduction\nbody starts here",
+    )
+    meta = parse_metadata(pdf)
+    assert meta["title"] == "Toward Better Slugs in Research Code"
+    # _guess_authors splits on commas and strips whitespace.
+    assert "Alice Doe" in meta["authors"]
+    assert "Bob Roe" in meta["authors"]
+    assert "Carol Lin" in meta["authors"]
+
+
+def test_parse_metadata_guess_authors_returns_empty_for_no_separator(tmp_path):
+    # Single-name byline with no comma/semicolon → heuristic returns [].
+    # This is the documented behaviour (audit pass 2 flagged it as a known
+    # gap rather than a bug — we lock it in so future tightening is
+    # deliberate).
+    pdf = _build_unmetadated_pdf(
+        tmp_path / "single.pdf",
+        "Solo Title Line\nSoloAuthor\n\n1. Introduction\nbody",
+    )
+    meta = parse_metadata(pdf)
+    assert meta["title"] == "Solo Title Line"
+    assert meta["authors"] == []
+
+
 def test_normalize_arxiv_id_handles_versions_and_urls():
     assert _normalize_arxiv_id("2401.12345") == "2401.12345"
     assert _normalize_arxiv_id("2401.12345v3") == "2401.12345"

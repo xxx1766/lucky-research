@@ -63,7 +63,9 @@ def _add_artifacts_subcommands(sub: argparse._SubParsersAction) -> None:
     )
     a_scan.add_argument(
         "--threshold", type=int, default=DEFAULT_UNREGISTERED_THRESHOLD,
-        help=f"Bytes; default {DEFAULT_UNREGISTERED_THRESHOLD} (1 GiB).",
+        metavar="BYTES",
+        help=f"Bytes; default {DEFAULT_UNREGISTERED_THRESHOLD / 1024**3:.0f} GiB "
+             f"({DEFAULT_UNREGISTERED_THRESHOLD} bytes).",
     )
     a_scan.set_defaults(func=cmd_artifacts_scan)
 

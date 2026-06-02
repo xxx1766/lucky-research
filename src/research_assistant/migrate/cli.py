@@ -436,8 +436,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_exp.add_argument(
         "--threshold", type=int, default=DEFAULT_UNREGISTERED_THRESHOLD,
+        metavar="BYTES",
         help="Bytes; files ≥this in experiments need external-artifacts.md "
-             f"entries. Default {DEFAULT_UNREGISTERED_THRESHOLD} (1 GiB).",
+             f"entries. Default {DEFAULT_UNREGISTERED_THRESHOLD / 1024**3:.0f} GiB "
+             f"({DEFAULT_UNREGISTERED_THRESHOLD} bytes).",
     )
     p_exp.add_argument("--dry-run", action="store_true", help="Scan + report only.")
     p_exp.add_argument(

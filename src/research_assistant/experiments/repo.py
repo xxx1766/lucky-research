@@ -64,6 +64,15 @@ def _preflight_ssh(url: str) -> str | None:
             "ssh-agent is running but has no keys loaded. "
             "Run: ssh-add ~/.ssh/id_rsa"
         )
+    if out.returncode == 2:
+        # `ssh-add -l` returns 2 when SSH_AUTH_SOCK is set but the agent
+        # the socket points at isn't reachable (stopped / replaced / stale
+        # tmux session). Without this branch the user gets a generic git
+        # network timeout 15s later.
+        return (
+            "ssh-agent socket is set (SSH_AUTH_SOCK) but the agent isn't "
+            "reachable. Run: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa"
+        )
     return None
 
 

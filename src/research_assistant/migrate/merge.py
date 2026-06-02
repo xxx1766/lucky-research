@@ -33,8 +33,15 @@ def _db_sidecar_path(dest: Path) -> Path:
 
     DB destination paths always end with ``.db``; the rule strips the
     extension and appends the marker so ``ruvector.db`` →
-    ``ruvector.from-migrate.db``.
+    ``ruvector.from-migrate.db``. The contract is documented as ``.db``-only
+    by callers (see :func:`apply`'s DB branch) — assert it here so a future
+    refactor that lets a non-``.db`` path slip through fails loudly instead
+    of silently producing e.g. ``ruvector.from-migrate.shm``.
     """
+    if dest.suffix != ".db":
+        raise ValueError(
+            f"_db_sidecar_path expects a .db path, got {dest.name!r}"
+        )
     return dest.with_name(f"{dest.stem}.from-migrate.db")
 
 

@@ -264,6 +264,41 @@ def test_read_binding_from_expert_md_absent(fake_dirs):
     assert binding.read_binding_from_expert_md("OSDI-2027", "ghost") is None
 
 
+def test_read_all_bindings_unions_primary_and_additional(fake_dirs):
+    fake_papers, fake_experiments = fake_dirs
+    for slug in ("weightlet-exp", "scaler-exp", "extra-exp"):
+        _make_experiment(fake_experiments, slug)
+    _make_local_paper(fake_papers, "OSDI-2027", "weightlet")
+    # Hand-write expert.md with both fields to lock the contract.
+    expert = fake_papers / "OSDI-2027" / "weightlet" / "expert.md"
+    expert.write_text(
+        "---\n"
+        "experiment: weightlet-exp\n"
+        "experiments:\n"
+        "  - weightlet-exp\n"   # duplicate of primary — should dedupe
+        "  - scaler-exp\n"
+        "  - extra-exp\n"
+        "---\n"
+        "body\n",
+        encoding="utf-8",
+    )
+    out = binding.read_all_bindings_from_expert_md("OSDI-2027", "weightlet")
+    # Primary first, additionals in their original order, no duplicates.
+    assert out == ["weightlet-exp", "scaler-exp", "extra-exp"]
+
+
+def test_read_all_bindings_primary_only(fake_dirs):
+    fake_papers, _ = fake_dirs
+    _make_local_paper(fake_papers, "OSDI-2027", "solo")
+    expert = fake_papers / "OSDI-2027" / "solo" / "expert.md"
+    expert.write_text("---\nexperiment: only-exp\n---\nbody\n", encoding="utf-8")
+    assert binding.read_all_bindings_from_expert_md("OSDI-2027", "solo") == ["only-exp"]
+
+
+def test_read_all_bindings_empty_when_missing(fake_dirs):
+    assert binding.read_all_bindings_from_expert_md("OSDI-2027", "ghost") == []
+
+
 # ---------- restore ----------
 
 def test_restore_all_recreates_symlinks(fake_dirs):
