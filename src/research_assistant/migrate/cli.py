@@ -399,11 +399,14 @@ def _print_partition_summary(result: ScanResult) -> None:
 
 
 def _fmt_size(n: int) -> str:
+    # The TB branch inside the loop also serves as the floor — once the loop
+    # reaches unit="TB" it always returns (no need for a post-loop fallback).
+    n_float: float = float(n)
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024 or unit == "TB":
-            return f"{n:.1f}{unit}" if unit != "B" else f"{n}B"
-        n /= 1024
-    return f"{n:.1f}TB"
+        if n_float < 1024 or unit == "TB":
+            return f"{int(n_float)}B" if unit == "B" else f"{n_float:.1f}{unit}"
+        n_float /= 1024
+    raise AssertionError("unreachable: loop exits via return on the TB iteration")
 
 
 def _safe_hostname() -> str:

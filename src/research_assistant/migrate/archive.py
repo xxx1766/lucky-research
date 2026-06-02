@@ -478,3 +478,21 @@ def extract_to(
 def open_for_streaming(zf: zipfile.ZipFile, arcname: str) -> IO[bytes]:
     """Open an archive member as a binary stream. Caller closes."""
     return zf.open(arcname, "r")
+
+
+def sha256_of_archive_member(zf: zipfile.ZipFile, arcname: str) -> str:
+    """Compute the sha256 of an archive member without writing to disk.
+
+    Used by the dry-run paths in :mod:`merge` so a checksum-warn verdict can
+    fire on dry-run too — the old behavior synthesized ``expected_sha256``
+    as the "extracted" sha, which made the inequality check at
+    :func:`merge._verdict_for_file` impossible to trip.
+    """
+    h = hashlib.sha256()
+    with zf.open(arcname, "r") as src:
+        while True:
+            chunk = src.read(_CHUNK)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()

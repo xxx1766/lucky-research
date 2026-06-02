@@ -211,9 +211,9 @@ def _match_artifact(
         for candidate in (basename, rel_under_base, in_experiment_rel):
             if fnmatch.fnmatch(candidate, r.glob):
                 return r
-        # Default glob `*` is forgiving — any file under the path matches.
-        if r.glob == "*":
-            return r
+        # No literal `glob == "*"` shortcut needed — fnmatch("*") already
+        # returns True for every candidate above, so the loop catches the
+        # default-glob case on its first iteration.
     return None
 
 

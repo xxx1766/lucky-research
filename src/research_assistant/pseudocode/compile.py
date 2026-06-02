@@ -108,6 +108,11 @@ def compile_snippet(
         wrapped = tmpdir / f"{stem}.tex"
         wrapped.write_text(doc_text, encoding="utf-8")
 
+        # Accumulate per-engine logs so the failure path can surface ALL
+        # attempted engines' tails (often tectonic's diagnostic is more
+        # informative than xelatex's; previously only the LAST engine's tail
+        # survived, losing earlier context).
+        per_engine_logs: list[tuple[str, str]] = []
         last_log = ""
         for eng in engines:
             if shutil.which(eng) is None:
@@ -124,8 +129,10 @@ def compile_snippet(
                 )
             except subprocess.TimeoutExpired as e:
                 last_log = f"[{eng}] timed out after {timeout_sec}s\n{e.stdout or ''}{e.stderr or ''}"
+                per_engine_logs.append((eng, last_log))
                 continue
             last_log = (result.stdout or "") + (result.stderr or "")
+            per_engine_logs.append((eng, last_log))
             produced = tmpdir / f"{stem}.pdf"
             if result.returncode == 0 and produced.exists():
                 final_pdf.parent.mkdir(parents=True, exist_ok=True)
@@ -137,11 +144,14 @@ def compile_snippet(
                     log_tail=_tail(last_log),
                 )
 
+    if per_engine_logs:
+        combined = "\n\n".join(f"=== {eng} ===\n{_tail(log)}" for eng, log in per_engine_logs)
+        return CompileResult(success=False, engine=None, pdf_path=None, log_tail=combined)
     return CompileResult(
         success=False,
         engine=None,
         pdf_path=None,
-        log_tail=_tail(last_log) if last_log else "no LaTeX engine on PATH (tried: " + ", ".join(engines) + ")",
+        log_tail="no LaTeX engine on PATH (tried: " + ", ".join(engines) + ")",
     )
 
 

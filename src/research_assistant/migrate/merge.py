@@ -19,6 +19,7 @@ from research_assistant.migrate.archive import (
     extract_to,
     is_db_file,
     is_db_sidecar,
+    sha256_of_archive_member,
 )
 from research_assistant.migrate.manifest import ImportEntry, ImportVerdict
 
@@ -68,7 +69,10 @@ def _verdict_for_file(
         if not dry_run:
             extracted_sha = extract_to(zf, entry.arcname, sidecar)
         else:
-            extracted_sha = entry.expected_sha256 or ""
+            # Compute the sha by reading the archive member only — don't
+            # write the sidecar to disk in dry-run, but DO honor checksum-
+            # warn detection by comparing real bytes against expected.
+            extracted_sha = sha256_of_archive_member(zf, entry.arcname)
         note = None
         verdict: ImportVerdict = "collision"
         if entry.expected_sha256 and extracted_sha and extracted_sha != entry.expected_sha256:

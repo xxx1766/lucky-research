@@ -88,7 +88,9 @@ def _replace_or_insert(text: str, block_body: str) -> str:
         prev_line_end = line_start - 1  # position of the '\n' before line_start, or -1
         prev_line_start = text.rfind("\n", 0, prev_line_end) + 1 if prev_line_end > 0 else 0
         prev_line = text[prev_line_start:prev_line_end] if prev_line_end > 0 else ""
-        if _HEADING_RE.match(prev_line.strip() + "\n") or prev_line.strip() == CONVENTIONS_HEADING:
+        # The regex permits optional trailing whitespace, but prev_line.strip()
+        # has already removed it — an exact equality check covers both forms.
+        if prev_line.strip() == CONVENTIONS_HEADING:
             replace_start = prev_line_start
         else:
             replace_start = line_start
