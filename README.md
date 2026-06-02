@@ -1,24 +1,28 @@
 # lucky-research
 
-A Claude Code research-assistant plugin. Five slash commands cover the full paper-writing
-loop — read papers, validate ideas, draft sections, manage references, and track your
-research trajectory over time.
+A Claude Code research-assistant plugin covering the whole paper loop — read papers,
+validate ideas, design + run experiments, draft sections, manage refs/figures/pseudocode,
+track your trajectory over time, and migrate the whole workspace across machines.
 
-## Five MVP capabilities
+> **Full slash-command surface (every subcommand, every flag): see [`HELP.md`](./HELP.md).**
 
-| Slash command | Skill | What it does |
+## Capabilities at a glance
+
+| Slash | Skill / agent | What it does |
 |---|---|---|
-| `/summarize`  | `lit-summarize`    | Summarize papers (`inputs/papers/*.pdf` or arXiv URLs) into structured markdown; index in AgentDB `papers/`. |
-| `/idea-check` | `idea-validate`    | Validate an idea via horizontal comparison (related-work matrix) or vertical lineage trace. |
-| `/paper`      | `paper-architect`  | Venue-rooted, multi-stage paper flow (`venue → direction → scout → focus → motivate → write`). Organizes everything under `outputs/papers/<venue>/<direction>/`. |
-| `/cite`       | `ref-manager`      | Resolve `[@cite:slug]` placeholders, emit BibTeX, manage `outputs/references/*.bib`. |
-| `/convert`    | `ref-manager`      | Convert Markdown ↔ LaTeX ↔ docx via pandoc. |
-| `/mentor`     | `research-mentor`  | Weekly check-in: compare recent activity against your stated research goals and surface path corrections. |
-| `/past-work`  | `past-work-historian` (agent) | Curate past projects under `inputs/past-work/<slug>.md` (template at `docs/past-work-template.md`). Subcommands: `list`, `add`, `sync`. Surfaces relevant prior work during `/paper direction`. |
-| `/boss`       | `boss-historian` (agent) | Track your group PI: profile + per-meeting notes + pre-report rehearsals under `inputs/boss-profile/` (templates at `docs/boss-profile-template.md`, `docs/boss-meeting-template.md`, `docs/boss-report-template.md`, `docs/boss-rehearsal-template.md`). Subcommands: `show`, `edit`, `meeting`, `rehearse`, `sync`. `/boss show` prints profile + last 3 meetings as pre-report prep. `/boss rehearse` runs a multi-turn mock Q&A against report material under `inputs/boss-profile/reports/` and saves the transcript to `inputs/boss-profile/rehearsals/`. |
-| `/experiment` | `experiment-runner` | Bind each experiment to a single GitHub repo (URL + branch + SHA tracked, optional `git clone --depth 1`). Record versioned execution attempts (semver — `v1.0`, `v1.1`, `v2.0` ...) with full env snapshot for reproducibility/rebuttal (host · GPU · CUDA · Python · library lockfile · random seeds · bound-repo commit). Mirror the structured result file from the bound repo into local storage so `/paper` can pull it at write time. Subcommands: `init`, `scout`, `design`, `sync`, `clone`, `version add/list`, `data add/list`, `analyze`, `status`, `list`, `show`. Templates under `docs/experiment-*-template.md`; tree under `outputs/experiments/<slug>/`. |
-
-> Post-MVP (not yet implemented): 科研绘图.
+| `/summarize`   | `lit-summarize`            | Summarize PDFs (`inputs/papers/*.pdf`) or arXiv URLs into structured markdown; index in AgentDB `papers/`. |
+| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (socratic → brainstorm → scout → contrarian → evaluate → venues → knowledge → handoff). Plus legacy `horizontal` / `vertical` modes. |
+| `/scout-swarm` | `research-swarm` (optional)| Optional ruflo accelerator — parallelize `/paper scout` with a researcher swarm. Degrades to "use `/paper scout`" when swarm tools are absent. |
+| `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
+| `/cite`        | `ref-manager`              | Scan LaTeX `\cite{...}` keys and merge BibTeX into `<direction>/refs.bib`. |
+| `/convert`     | `ref-manager`              | Markdown ↔ LaTeX ↔ docx via pandoc. |
+| `/mentor`      | `research-mentor`          | Weekly check-in vs goals · per-project research-notes triplet (state / log / findings) · past-work + boss subroutes. |
+| `/past-work`   | `past-work-historian`      | Curate past projects under `inputs/past-work/<slug>.md`; bind/clone the source repo for `/paper direction` recall. |
+| `/boss`        | `boss-historian`           | Group-PI profile + per-meeting notes + pre-report rehearsals under `inputs/boss-profile/`. Alias for `/mentor boss …`. |
+| `/experiment`  | `experiment-runner`        | Bind each experiment to one GitHub repo (URL + branch + SHA), record semver versions (env · pip freeze · commit · result mirror), register external artifacts, run advisory feasibility, analyze results. |
+| `/figure`      | `figure-tool`              | Structural SVG (architecture / pipeline / concept) or matplotlib data plots, scoped to current paper or experiment. Plus a curated reference-figure library. |
+| `/pseudocode`  | `pseudocode-tool`          | LaTeX algorithm pseudocode (`algorithm + algpseudocode`, or `algorithm2e`) with notation linting, scoped like `/figure`. |
+| `/migrate`     | `migrate-tool`             | Bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude`) into a zip; AES-encrypt optional; never overwrites on import. `reindex` rebuilds AgentDB from on-disk truth. |
 
 ## Quickstart
 
@@ -43,23 +47,29 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 ## How a typical session works
 
 ```
-1. Drop PDFs into inputs/papers/   (or pass an arXiv URL inline)
-2. /summarize                      → outputs/summaries/<slug>.md  + AgentDB papers/<slug>
-3. /idea-check horizontal: <idea>  → outputs/idea-checks/<idea>-horizontal.md
-4. /paper venue NeurIPS-2026       → outputs/papers/NeurIPS-2026/{_venue.md, _template/}
-                                     (drop conference .sty/.cls into _template/)
-5. /paper direction <slug>         → outputs/papers/<venue>/<direction>/expert.md
-6. /paper scout                    → <direction>/related-papers/*.md (+ AgentDB papers/)
-7. /paper focus                    → <direction>/focused-problem.md
-8. /paper motivate                 → <direction>/experiments/{motivation,benchmark}.md
-9. /paper write [section]          → <direction>/outline.md (no section) OR
-                                     <direction>/sections/<section>.tex + auto-render
-                                     of <direction>/main.pdf via tectonic
-9b. /paper render                  → re-render <direction>/main.pdf without writing
-10. /cite                          → <direction>/refs.bib (in paper context) OR
-                                     outputs/references/<paper>.bib (Markdown drafts)
-11. /convert <draft.md> --to=tex
-12. /mentor                        → weekly trajectory check-in
+1.  Drop PDFs into inputs/papers/   (or pass arXiv URL inline)
+2.  /summarize                      → outputs/summaries/<slug>.md + AgentDB papers/
+3.  /idea-check "<free-text>"       → Socratic → brainstorm → scout → contrarian →
+                                       evaluate → venues → knowledge → handoff
+                                       (sets the /paper cursor)
+4.  /paper venue NeurIPS-2026       → outputs/papers/NeurIPS-2026/_venue.md
+                                       (optionally `cp -r docs/venues/NeurIPS/2026/* .`
+                                       for the conference _template/)
+5.  /paper direction <slug>         → expert.md + status.md
+6.  /experiment init                → outputs/experiments/<slug>/manifest.md
+                                       (or /paper bind to an existing experiment)
+7.  /paper scout                    → <direction>/related-papers/*.md
+8.  /experiment design + feasibility + version add → versions/<vN.M>.md
+9.  /paper focus → motivate         → focused-problem.md + experiments/{motivation,benchmark}.md
+10. /figure new <slug>              → <scope>/figures/<slug>.{svg,pdf,note.md}
+11. /pseudocode new <slug>          → <scope>/algorithms/<slug>.{tex,pdf,note.md}
+12. /paper write [section]          → outline.md (no section) OR sections/<section>.tex
+                                       + auto-rendered main.pdf
+13. /cite                           → <direction>/refs.bib
+14. /paper humanize + review        → reviews/{humanize,review}-<date>.md
+15. /mentor                         → weekly check-in vs goals
+16. /migrate export                 → outputs/migrate/migrate-<host>-<ts>.zip
+                                       (restore on a new machine with /migrate import)
 ```
 
 > Every `/paper` subcommand ends with a one-line progress footer
@@ -95,10 +105,16 @@ direction as the new cursor without touching `expert.md` or any other artifact.
 
 | Shared (in git)            | Private per user (gitignored) |
 |---|---|
-| `.claude/skills/`, `.claude/commands/`, `.claude/agents/` (the plugin) | `inputs/` — your PDFs |
-| `src/research_assistant/` (Python helpers) | `outputs/` — your generated summaries, drafts, bibs |
-| `pyproject.toml`, `README.md`, `CLAUDE.md` | `ruvector.db` — your AgentDB memory |
-| `.claude-flow/CAPABILITIES.md`, `config.yaml` | `.swarm/` — your local swarm runtime state |
+| `.claude/skills/`, `.claude/commands/`, `.claude/agents/` (the plugin) | `inputs/` — your PDFs, past-work, boss-profile, figure-refs |
+| `src/research_assistant/` (Python helpers) | `outputs/` — your summaries, drafts, papers, experiments, figures, migrate zips |
+| `pyproject.toml`, `README.md`, `HELP.md`, `CLAUDE.md` | `ruvector.db` — your AgentDB memory |
+| `docs/` — templates, venue library, design specs | `.swarm/` — your local swarm runtime state |
+| `.claude-flow/CAPABILITIES.md`, `config.yaml` | `.claude-flow/logs/`, `sessions/`, `metrics/` |
+
+Cross-machine transfer is handled by `/migrate`: zip the private side on one machine,
+unzip on the next — collisions never overwrite (renamed to `*.from-migrate-<ts>.*`),
+DBs are reindexed from on-disk truth via `/migrate reindex` after import. AES-256
+encryption is opt-in (`--encrypt --passphrase-env VAR`).
 
 ## Sharing with friends
 
@@ -115,5 +131,7 @@ runtime contract.
 
 ## Status
 
-**v0.0.1** — scaffold + stub skills. Each `SKILL.md` has the workflow but the prompts
-are still TBD. Real skill bodies land feature-by-feature, starting with `lit-summarize`.
+All 13 slash commands have working skill bodies and deterministic Python helpers
+with test coverage. The plugin is in daily use; the audit log lives at the top of
+`CLAUDE.md` and in commit history. Known sharp edges and advertised-but-unimplemented
+subcommands are flagged inline in [`HELP.md`](./HELP.md) (look for the ⚠️ marks).

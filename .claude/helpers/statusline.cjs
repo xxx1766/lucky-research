@@ -152,7 +152,7 @@ function getModelName() {
                 const ts = usage[id] && usage[id].lastUsedAt ? new Date(usage[id].lastUsedAt).getTime() : 0;
                 if (ts > latest) { latest = ts; modelId = id; }
               }
-              if (modelId.includes('opus')) return 'Opus 4.6 (1M context)';
+              if (modelId.includes('opus')) return 'Opus 4.7';
               if (modelId.includes('sonnet')) return 'Sonnet 4.6';
               if (modelId.includes('haiku')) return 'Haiku 4.5';
               return modelId.split('-').slice(1, 3).join(' ');
@@ -168,7 +168,7 @@ function getModelName() {
   const settings = getSettings();
   if (settings && settings.model) {
     const m = settings.model;
-    if (m.includes('opus')) return 'Opus 4.6 (1M context)';
+    if (m.includes('opus')) return 'Opus 4.7';
     if (m.includes('sonnet')) return 'Sonnet 4.6';
     if (m.includes('haiku')) return 'Haiku 4.5';
   }
@@ -202,8 +202,19 @@ function getLearningStats() {
     } catch { /* ignore */ }
   }
 
-  // 3. Count patterns from memory.db using row count (sqlite header bytes 28-31)
+  // 3. Count patterns from memory.db using row count (sqlite header bytes 28-31).
+  //
+  // ruflo#1989: when encryption at rest is enabled, memory.db is no
+  // longer a SQLite database -- it is an RFE1-magicked ciphertext blob.
+  // The original code blindly read bytes 28-31 as a page count and
+  // rendered 3.3B patterns (uint32 of random ciphertext). That
+  // cascaded into fake DDD 5/5 / 100% indicators downstream.
+  //
+  // Guard with the SQLite magic ("SQLite format 3\0", 16 bytes at
+  // offset 0). Also clamp implausible page counts (>1M pages ~= 4GB)
+  // to avoid reporting nonsense even on plaintext SQLite.
   if (patterns === 0) {
+    const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'binary');
     const memoryPaths = [
       path.join(CWD, '.claude-flow', 'memory.db'),
       path.join(CWD, 'data', 'memory.db'),
@@ -211,18 +222,27 @@ function getLearningStats() {
     ];
     for (const dbPath of memoryPaths) {
       try {
-        if (fs.existsSync(dbPath)) {
-          // Read SQLite header: page count at offset 28 (4 bytes big-endian)
-          const fd = fs.openSync(dbPath, 'r');
-          const buf = Buffer.alloc(4);
-          fs.readSync(fd, buf, 0, 4, 28);
+        if (!fs.existsSync(dbPath)) continue;
+        const fd = fs.openSync(dbPath, 'r');
+        const head = Buffer.alloc(16);
+        fs.readSync(fd, head, 0, 16, 0);
+        if (!head.equals(SQLITE_MAGIC)) {
+          // Not plaintext SQLite (likely RFE1 encrypted, an empty
+          // file, or some other format). Skip — let the daemon or
+          // patterns.json fallback report the real number.
           fs.closeSync(fd);
-          const pageCount = buf.readUInt32BE(0);
-          // Each page typically holds ~10-50 rows; use page count as conservative estimate
-          // But report 0 if DB exists but has only schema pages (< 3)
-          patterns = pageCount > 2 ? pageCount - 2 : 0;
-          break;
+          continue;
         }
+        const buf = Buffer.alloc(4);
+        fs.readSync(fd, buf, 0, 4, 28);
+        fs.closeSync(fd);
+        const pageCount = buf.readUInt32BE(0);
+        // Sanity: reject implausible counts (> 1M pages ≈ 4 GB DB).
+        if (pageCount > 1_000_000) continue;
+        // Each page typically holds ~10-50 rows; use page count as
+        // conservative estimate. Report 0 if only schema pages (< 3).
+        patterns = pageCount > 2 ? pageCount - 2 : 0;
+        break;
       } catch { /* ignore */ }
     }
   }
@@ -258,17 +278,24 @@ function getV3Progress() {
   let domainsCompleted = Math.min(5, Math.floor(dddProgress / 20));
 
   // Only derive DDD progress from real ddd-progress.json or real pattern data
-  // Don't inflate domains from pattern count — 0 means no DDD work tracked
-  if (dddProgress === 0 && learning.patterns > 0) {
+  // Don't inflate domains from pattern count — 0 means no DDD work tracked.
+  // ruflo#1989: defensively clamp learning.patterns even though
+  // getLearningStats already guards against the RFE1-encrypted case --
+  // if any future regression in the upstream reader returns a wild
+  // value, we do not want to silently inflate DDD to 5/5 / 100%.
+  const realPatterns = Number.isFinite(learning.patterns) && learning.patterns >= 0 && learning.patterns < 1_000_000
+    ? learning.patterns
+    : 0;
+  if (dddProgress === 0 && realPatterns > 0) {
     // Conservative: only count domains if we have substantial real pattern data
     // Each domain requires ~100 real stored patterns to claim completion
-    domainsCompleted = Math.min(5, Math.floor(learning.patterns / 100));
+    domainsCompleted = Math.min(5, Math.floor(realPatterns / 100));
     dddProgress = Math.floor((domainsCompleted / totalDomains) * 100);
   }
 
   return {
     domainsCompleted, totalDomains, dddProgress,
-    patternsLearned: learning.patterns,
+    patternsLearned: realPatterns,
     sessionsCompleted: learning.sessions,
   };
 }
@@ -354,8 +381,14 @@ function getSystemMetrics() {
   if (learningData && learningData.intelligence && learningData.intelligence.score !== undefined) {
     intelligencePct = Math.min(100, Math.floor(learningData.intelligence.score));
   } else {
-    // Use real data only — patterns from actual store, vectors from actual DB
-    const fromPatterns = learning.patterns > 0 ? Math.min(100, Math.floor(learning.patterns / 20)) : 0;
+    // Use real data only — patterns from actual store, vectors from actual DB.
+    // ruflo#1989: clamp patterns to a sane upper bound. A multi-billion
+    // pattern count from a buggy reader would saturate intelligencePct
+    // to 100% and silently lie about progress.
+    const realPatterns = Number.isFinite(learning.patterns) && learning.patterns >= 0 && learning.patterns < 1_000_000
+      ? learning.patterns
+      : 0;
+    const fromPatterns = realPatterns > 0 ? Math.min(100, Math.floor(realPatterns / 20)) : 0;
     const fromVectors = agentdb.vectorCount > 0 ? Math.min(100, Math.floor(agentdb.vectorCount / 20)) : 0;
     intelligencePct = Math.max(fromPatterns, fromVectors);
   }
@@ -602,146 +635,86 @@ function generateStatusline() {
   const modelName = getModelFromStdin() || getModelName();
   const ctxInfo = getContextFromStdin();
   const costInfo = getCostFromStdin();
-  const progress = getV3Progress();
   const security = getSecurityStatus();
   const swarm = getSwarmStatus();
-  const system = getSystemMetrics();
-  const adrs = getADRStatus();
-  const hooks = getHooksStatus();
   const agentdb = getAgentDBStats();
-  const tests = getTestStats();
-  const session = getSessionStats();
-  const integration = getIntegrationStatus();
   const lines = [];
 
-  // Header
-  // ruflo-ver-fix: resolve the installed ruflo version from the running node's install tree
-  // (nvm-safe, no process spawn). Falls back to the legacy @claude-flow/cli
-  // package name and local project installs before giving up.
-  let pkgVersion = 'dev';
-  {
-    const nodeBin = path.dirname(process.execPath);
-    const globalRoot = path.join(nodeBin, '..', 'lib', 'node_modules'); // *nix
-    const winRoot = path.join(nodeBin, 'node_modules');                 // Windows
-    const candidates = [
-      path.join(globalRoot, 'ruflo', 'package.json'),
-      path.join(winRoot, 'ruflo', 'package.json'),
-      path.join(globalRoot, '@claude-flow', 'cli', 'package.json'),
-      path.join(winRoot, '@claude-flow', 'cli', 'package.json'),
-      path.join(CWD, 'node_modules', 'ruflo', 'package.json'),
+  // Unified palette (mono + one accent): accent on the brand mark and labels
+  // only; values in default text; dim for separators / inactive; a single
+  // non-bold red reserved for genuine alerts (ctx >= 90%, commits behind,
+  // unresolved security). No bold, no bright, no emoji.
+  const accent = c.purple, val = c.reset, mut = c.dim, alert = c.red;
+
+  // Header — read version from the FIRST package.json we find, preferring
+  // the plugin install at ~/.claude/plugins/marketplaces/ruflo/package.json.
+  // The previous list only checked project-local node_modules, so plugin
+  // users saw the hard-coded fallback (V3.5) even on newer alphas (#1951).
+  /* ruflo-ver-fix */ let pkgVersion = (function () { try { var _p = require('path'), _f = require('fs'); var _bin = _p.dirname(process.execPath); var _c = [ _p.join(_bin, '..', 'lib', 'node_modules', 'ruflo', 'package.json'), _p.join(_bin, 'node_modules', 'ruflo', 'package.json'), _p.join(process.cwd(), 'node_modules', 'ruflo', 'package.json') ]; for (var _i = 0; _i < _c.length; _i++) { if (_f.existsSync(_c[_i])) return JSON.parse(_f.readFileSync(_c[_i], 'utf8')).version; } } catch (e) {} return 'dev'; })();
+  try {
+    const home = require('os').homedir();
+    const pkgPaths = [
+      // 1. The plugin's own root (installed via /plugin install).
+      path.join(home, '.claude', 'plugins', 'marketplaces', 'ruflo', 'package.json'),
+      // 2. Project-local @claude-flow/cli — npm-style install.
       path.join(CWD, 'node_modules', '@claude-flow', 'cli', 'package.json'),
+      // 3. Project-local ruflo umbrella.
+      path.join(CWD, 'node_modules', 'ruflo', 'package.json'),
+      // 4. Source-checkout location (when developing in this repo).
+      path.join(CWD, 'v3', '@claude-flow', 'cli', 'package.json'),
     ];
-    for (const p of candidates) {
+    for (const p of pkgPaths) {
+      if (!fs.existsSync(p)) continue;
       try {
-        if (fs.existsSync(p)) {
-          const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (pkg.version) { pkgVersion = pkg.version; break; }
+        const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+        if (pkg && typeof pkg.version === 'string' && pkg.version.length > 0) {
+          pkgVersion = pkg.version;
+          break;
         }
-      } catch { /* try next candidate */ }
+      } catch { /* malformed package.json — try next */ }
     }
-  }
-  let header = c.bold + c.brightPurple + '\u258A RuFlo V' + pkgVersion + ' ' + c.reset;
-  header += (swarm.coordinationActive ? c.brightCyan : c.dim) + '\u25CF ' + c.brightCyan + git.name + c.reset;
+  } catch { /* fall through to the hardcoded default */ }
+  // Line 1 (session): brand + version, git user, branch + changes, model,
+  // context %, cost. Segments joined by two spaces; labels in accent, values
+  // in default text.
+  let header = accent + '\u258Aruflo v' + pkgVersion + val + '  ' + git.name;
   if (git.gitBranch) {
-    header += '  ' + c.dim + '\u2502' + c.reset + '  ' + c.brightBlue + '\u23C7 ' + git.gitBranch + c.reset;
-    const changes = git.modified + git.staged + git.untracked;
-    if (changes > 0) {
-      let ind = '';
-      if (git.staged > 0) ind += c.brightGreen + '+' + git.staged + c.reset;
-      if (git.modified > 0) ind += c.brightYellow + '~' + git.modified + c.reset;
-      if (git.untracked > 0) ind += c.dim + '?' + git.untracked + c.reset;
-      header += ' ' + ind;
-    }
-    if (git.ahead > 0) header += ' ' + c.brightGreen + '\u2191' + git.ahead + c.reset;
-    if (git.behind > 0) header += ' ' + c.brightRed + '\u2193' + git.behind + c.reset;
+    header += '  ' + accent + '\u23C7' + val + ' ' + git.gitBranch;
+    let ind = '';
+    if (git.staged > 0) ind += '+' + git.staged;          // staged - default text
+    if (git.modified > 0) ind += '~' + git.modified;      // modified - default text
+    if (git.untracked > 0) ind += mut + '?' + git.untracked + c.reset; // untracked - dim
+    if (ind) header += ' ' + ind;
+    if (git.ahead > 0) header += ' \u2191' + git.ahead;
+    if (git.behind > 0) header += ' ' + alert + '\u2193' + git.behind + c.reset;
   }
-  header += '  ' + c.dim + '\u2502' + c.reset + '  ' + c.purple + modelName + c.reset;
-  // Show session duration from Claude Code stdin if available, else from local files
-  const duration = costInfo ? costInfo.duration : session.duration;
-  if (duration) header += '  ' + c.dim + '\u2502' + c.reset + '  ' + c.cyan + '\u23F1 ' + duration + c.reset;
-  // Show context usage from Claude Code stdin if available
+  header += '  ' + modelName;
+  // Context usage from Claude Code stdin \u2014 only alerts (>= 90%) get color
   if (ctxInfo && ctxInfo.usedPct > 0) {
-    const ctxColor = ctxInfo.usedPct >= 90 ? c.brightRed : ctxInfo.usedPct >= 70 ? c.brightYellow : c.brightGreen;
-    header += '  ' + c.dim + '\u2502' + c.reset + '  ' + ctxColor + '\u25CF ' + ctxInfo.usedPct + '% ctx' + c.reset;
+    const ctxColor = ctxInfo.usedPct >= 90 ? alert : val;
+    header += '  ' + ctxColor + ctxInfo.usedPct + '%' + c.reset + ' ' + mut + 'ctx' + c.reset;
   }
-  // Show cost from Claude Code stdin if available
+  // Cost from Claude Code stdin
   if (costInfo && costInfo.costUsd > 0) {
-    header += '  ' + c.dim + '\u2502' + c.reset + '  ' + c.brightYellow + '$' + costInfo.costUsd.toFixed(2) + c.reset;
+    header += '  ' + accent + '$' + c.reset + costInfo.costUsd.toFixed(2);
   }
   lines.push(header);
 
-  // Separator
-  lines.push(c.dim + '\u2500'.repeat(53) + c.reset);
-
-  // Line 1: DDD Domains
-  const domainsColor = progress.domainsCompleted >= 3 ? c.brightGreen : progress.domainsCompleted > 0 ? c.yellow : c.red;
-  let perfIndicator;
-  if (agentdb.hasHnsw && agentdb.vectorCount > 0) {
-    const speedup = agentdb.vectorCount > 10000 ? '12500x' : agentdb.vectorCount > 1000 ? '150x' : '10x';
-    perfIndicator = c.brightGreen + '\u26A1 HNSW ' + speedup + c.reset;
-  } else if (progress.patternsLearned > 0) {
-    const pk = progress.patternsLearned >= 1000 ? (progress.patternsLearned / 1000).toFixed(1) + 'k' : String(progress.patternsLearned);
-    perfIndicator = c.brightYellow + '\uD83D\uDCDA ' + pk + ' patterns' + c.reset;
-  } else {
-    perfIndicator = c.dim + '\u26A1 target: 150x-12500x' + c.reset;
+  // Line 2 (coordination): swarm + memory + security only. Each segment renders
+  // only when it carries data; swarm always shows (dim when idle). If nothing
+  // is present the line is omitted and the statusline degrades to one line.
+  const seg = [];
+  const swarmColor = swarm.activeAgents > 0 ? val : mut;
+  seg.push(accent + 'swarm' + c.reset + ' ' + swarmColor + swarm.activeAgents + '/' + swarm.maxAgents + c.reset);
+  if (agentdb.dbSizeKB > 0 || agentdb.vectorCount > 0) {
+    const sizeDisp = agentdb.dbSizeKB >= 1024 ? (agentdb.dbSizeKB / 1024).toFixed(1) + 'MB' : agentdb.dbSizeKB + 'KB';
+    seg.push(accent + 'mem' + c.reset + ' ' + sizeDisp + '\u00B7' + agentdb.vectorCount);
   }
-  lines.push(
-    c.brightCyan + '\uD83C\uDFD7\uFE0F  DDD Domains' + c.reset + '    ' + progressBar(progress.domainsCompleted, progress.totalDomains) + '  ' +
-    domainsColor + progress.domainsCompleted + c.reset + '/' + c.brightWhite + progress.totalDomains + c.reset + '    ' + perfIndicator
-  );
-
-  // Line 2: Swarm + Hooks + CVE + Memory + Intelligence
-  const swarmInd = swarm.coordinationActive ? c.brightGreen + '\u25C9' + c.reset : c.dim + '\u25CB' + c.reset;
-  const agentsColor = swarm.activeAgents > 0 ? c.brightGreen : c.red;
-  const secIcon = security.status === 'CLEAN' ? '\uD83D\uDFE2' : (security.status === 'IN_PROGRESS' || security.status === 'STALE') ? '\uD83D\uDFE1' : (security.status === 'NONE' ? '\u26AA' : '\uD83D\uDD34');
-  const secColor = security.status === 'CLEAN' ? c.brightGreen : (security.status === 'IN_PROGRESS' || security.status === 'STALE') ? c.brightYellow : (security.status === 'NONE' ? c.dim : c.brightRed);
-  const hooksColor = hooks.enabled > 0 ? c.brightGreen : c.dim;
-  const intellColor = system.intelligencePct >= 80 ? c.brightGreen : system.intelligencePct >= 40 ? c.brightYellow : c.dim;
-
-  lines.push(
-    c.brightYellow + '\uD83E\uDD16 Swarm' + c.reset + '  ' + swarmInd + ' [' + agentsColor + String(swarm.activeAgents).padStart(2) + c.reset + '/' + c.brightWhite + swarm.maxAgents + c.reset + ']  ' +
-    c.brightPurple + '\uD83D\uDC65 ' + system.subAgents + c.reset + '    ' +
-    c.brightBlue + '\uD83E\uDE9D ' + hooksColor + hooks.enabled + c.reset + '/' + c.brightWhite + hooks.total + c.reset + '    ' +
-    secIcon + ' ' + secColor + 'CVE ' + security.cvesFixed + c.reset + '/' + c.brightWhite + security.totalCves + c.reset + '    ' +
-    c.brightCyan + '\uD83D\uDCBE ' + system.memoryMB + 'MB' + c.reset + '    ' +
-    intellColor + '\uD83E\uDDE0 ' + String(system.intelligencePct).padStart(3) + '%' + c.reset
-  );
-
-  // Line 3: Architecture
-  const dddColor = progress.dddProgress >= 50 ? c.brightGreen : progress.dddProgress > 0 ? c.yellow : c.red;
-  const adrColor = adrs.count > 0 ? (adrs.implemented === adrs.count ? c.brightGreen : c.yellow) : c.dim;
-  const adrDisplay = adrs.compliance > 0 ? adrColor + '\u25CF' + adrs.compliance + '%' + c.reset : adrColor + '\u25CF' + adrs.implemented + '/' + adrs.count + c.reset;
-
-  lines.push(
-    c.brightPurple + '\uD83D\uDD27 Architecture' + c.reset + '    ' +
-    c.cyan + 'ADRs' + c.reset + ' ' + adrDisplay + '  ' + c.dim + '\u2502' + c.reset + '  ' +
-    c.cyan + 'DDD' + c.reset + ' ' + dddColor + '\u25CF' + String(progress.dddProgress).padStart(3) + '%' + c.reset + '  ' + c.dim + '\u2502' + c.reset + '  ' +
-    c.cyan + 'Security' + c.reset + ' ' + secColor + '\u25CF' + security.status + c.reset
-  );
-
-  // Line 4: AgentDB, Tests, Integration
-  const hnswInd = agentdb.hasHnsw ? c.brightGreen + '\u26A1' + c.reset : '';
-  const sizeDisp = agentdb.dbSizeKB >= 1024 ? (agentdb.dbSizeKB / 1024).toFixed(1) + 'MB' : agentdb.dbSizeKB + 'KB';
-  const vectorColor = agentdb.vectorCount > 0 ? c.brightGreen : c.dim;
-  const testColor = tests.testFiles > 0 ? c.brightGreen : c.dim;
-
-  let integStr = '';
-  if (integration.mcpServers.total > 0) {
-    const mcpCol = integration.mcpServers.enabled === integration.mcpServers.total ? c.brightGreen :
-                   integration.mcpServers.enabled > 0 ? c.brightYellow : c.red;
-    integStr += c.cyan + 'MCP' + c.reset + ' ' + mcpCol + '\u25CF' + integration.mcpServers.enabled + '/' + integration.mcpServers.total + c.reset;
+  if (security.status && security.status !== 'NONE') {
+    const secColor = (security.status === 'CLEAN' || security.status === 'IN_PROGRESS' || security.status === 'STALE') ? val : alert;
+    seg.push(accent + 'sec' + c.reset + ' ' + secColor + security.status + c.reset);
   }
-  if (integration.hasDatabase) integStr += (integStr ? '  ' : '') + c.brightGreen + '\u25C6' + c.reset + 'DB';
-  if (integration.hasApi) integStr += (integStr ? '  ' : '') + c.brightGreen + '\u25C6' + c.reset + 'API';
-  if (!integStr) integStr = c.dim + '\u25CF none' + c.reset;
-
-  lines.push(
-    c.brightCyan + '\uD83D\uDCCA AgentDB' + c.reset + '    ' +
-    c.cyan + 'Vectors' + c.reset + ' ' + vectorColor + '\u25CF' + agentdb.vectorCount + hnswInd + c.reset + '  ' + c.dim + '\u2502' + c.reset + '  ' +
-    c.cyan + 'Size' + c.reset + ' ' + c.brightWhite + sizeDisp + c.reset + '  ' + c.dim + '\u2502' + c.reset + '  ' +
-    c.cyan + 'Tests' + c.reset + ' ' + testColor + '\u25CF' + tests.testFiles + c.reset + ' ' + c.dim + '(~' + tests.testCases + ' cases)' + c.reset + '  ' + c.dim + '\u2502' + c.reset + '  ' +
-    integStr
-  );
+  if (seg.length) lines.push(seg.join('  '));
 
   return lines.join('\n');
 }

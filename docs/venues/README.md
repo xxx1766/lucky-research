@@ -29,6 +29,21 @@ rules, scoring rubric, recent-trend summary. `paper-architect`'s Stage 1
 generates this from the CFP; once curated, it's worth promoting up to
 `docs/venues/<CONF>/<YEAR>/` so the next cycle inherits the structure.
 
+`_venue.md` is also where you can pin a niche venue to a *family*. Add one
+line (first ~50 lines of the file, anywhere):
+
+```
+Family: systems
+```
+
+Known families are `systems`, `nlp`, `cv`, `ml`, `db`, `ir`. They feed into
+the per-section heuristics — see `family_for_venue` in
+`research_assistant.papers.venue_family` and the `## family: <name>` blocks
+in `.claude/skills/paper-architect/references/section-heuristics.md`. The
+built-in venue→family map already covers OSDI/SOSP/NSDI/EuroSys/ASPLOS/
+ACL/EMNLP/NAACL/CVPR/ICCV/ECCV/ICML/NeurIPS/ICLR/VLDB/SIGMOD/SIGIR/WWW etc.,
+so most users won't need this override.
+
 ### `_template/`
 
 Official LaTeX assets distributed by the venue — `.sty`, `.cls`, `.bst`,

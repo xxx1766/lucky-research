@@ -15,9 +15,9 @@ Five MVP capabilities, each exposed as a Skill + slash command:
 | `/idea-check` | `idea-validate`    | idea 确认 — horizontal comparison matrix OR vertical lineage trace. |
 | `/paper`      | `paper-architect`  | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → scout → focus → motivate → write`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`, `/convert` | `ref-manager`      | 参考文献 + 格式 — BibTeX merge, cite-as-you-write resolution, Markdown/LaTeX/docx via pandoc. |
-| `/mentor`     | `research-mentor`  | 科研导师 / 发展规划 — long-running trajectory tracking, weekly check-ins, path corrections. |
+| `/mentor`     | `research-mentor` + `boss-historian` (agent) | 科研导师 + 老板汇报 — long-running trajectory tracking, weekly check-ins, path corrections, plus boss profile / meeting log / rehearsal under `/mentor boss …`. |
 | `/past-work`  | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; powers recall during `/paper direction` discussions. |
-| `/boss`       | `boss-historian` (agent) | 大老板形象 — capture profile + per-meeting notes under `inputs/boss-profile/`; `/boss show` prints profile + last 3 meetings as pre-report prep. |
+| `/boss`       | _alias_ for `/mentor boss …` | Shortcut for muscle memory; identical behavior. |
 | `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. Plus `/experiment artifacts list\|register\|scan` for managing per-experiment `external-artifacts.md`. |
 | `/figure`     | `figure-tool`       | 科研绘图 — structural SVG + matplotlib data plots + reference-figure library; scoped to current /paper or /experiment cursor. |
 | `/migrate`    | `migrate-tool`      | 跨机器迁移 — bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude` config) into one zip and restore on a new machine without overwriting existing files. Excludes registered external artifacts (HF base models, …) and records their fetch commands in the archive manifest. |
@@ -39,7 +39,8 @@ src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, 
                           ref-manager, research-mentor, experiment-runner, figure-tool,
                           migrate-tool, pseudocode-tool) — Claude-Code-discoverable
 .claude/commands/         Slash entry points (/summarize, /idea-check, /paper,
-                          /cite, /convert, /mentor, /past-work, /boss, /experiment,
+                          /cite, /convert, /mentor [boss …], /past-work,
+                          /boss (alias for /mentor boss), /experiment,
                           /figure, /migrate, /pseudocode)
 .claude/agents/           RuFlo V3 framework agents (89 included) + domain agents
                           (past-work-historian, boss-historian)
