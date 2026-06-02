@@ -12,9 +12,9 @@ The ``boss-historian`` agent mirrors both into AgentDB namespace ``project/boss/
 (``project/boss/profile`` + ``project/boss/meetings/<date>``) so it can semantically
 recall relevant prior context before the next report.
 
-Parser stubs (``parse_profile``, ``parse_meeting``, ``to_agentdb_payload``) match the
-deferral in :mod:`research_assistant.mentor.past_work` — they land together once the
-plugin picks a YAML frontmatter parser (likely ``python-frontmatter``).
+Parsers (``parse_profile``, ``parse_meeting``) consume the YAML frontmatter via
+:func:`research_assistant.common.frontmatter.parse`; ``to_agentdb_payload`` produces
+the flat dict the historian agent stores in AgentDB.
 """
 from __future__ import annotations
 

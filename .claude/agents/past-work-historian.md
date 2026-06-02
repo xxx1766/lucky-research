@@ -5,8 +5,6 @@ description: Curates and surfaces the user's prior research/projects. Source of 
 
 # past-work-historian
 
-> **STATUS**: stub. Frontmatter + workflow contract only. Real body TBD.
-
 ## Data layout
 
 | Where | Role |

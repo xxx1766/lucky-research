@@ -12,7 +12,8 @@ are easy to test offline.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timezone
+from pathlib import Path
 
 # Minimal English stopword list — enough to keep token-overlap meaningful for
 # the kinds of phrases that appear in goal statements and activity log entries.
@@ -93,6 +94,84 @@ def diff_goals(
     return {"on_track": on_track, "drifting": drifting, "missing": missing}
 
 
+_STALE_INCLUDED_STATUSES: frozenset[str] = frozenset({"active"})
+
+
+def stale_experiments(
+    min_age_days: int = 14,
+    *,
+    today: date | None = None,
+) -> list[dict]:
+    """Return active experiments with no new version in ``min_age_days`` days.
+
+    Used by the weekly check-in to surface trajectory drift — a goal can look
+    on-track in the activity log while the corresponding experiment hasn't had
+    a version added in weeks. The "freshness" signal is the most recent
+    ``versions/<vN.M>.md`` mtime; if no versions exist, ``manifest.md`` mtime
+    is the fallback (a long-uninitialized experiment is just as much a drift
+    signal as a stalled one).
+
+    Experiments with status ``paused`` / ``archived`` / ``abandoned`` are
+    excluded — they're intentionally idle, not drifting. ``planned``
+    experiments are also excluded (they haven't started; surfacing them as
+    stale would be noise).
+
+    Each returned dict carries ``slug``, ``title``, ``status``,
+    ``latest_version`` (or ``None``), and ``days_since_update``. Sorted by
+    ``days_since_update`` descending (oldest first) so the most-stale
+    experiment leads the check-in.
+
+    ``today`` is injectable for deterministic tests; defaults to
+    ``date.today()`` in UTC.
+    """
+    # Lazy imports: avoid a circular dependency at module import time —
+    # ``research_assistant.experiments`` doesn't import mentor, but we want
+    # mentor's other helpers (diff_goals, template) to be importable without
+    # paying the experiments-package import cost.
+    from research_assistant.experiments import (
+        EXPERIMENTS_DIR,
+        list_experiments,
+        list_versions,
+        parse_experiment,
+        version_path,
+    )
+
+    if not EXPERIMENTS_DIR.is_dir():
+        return []
+    reference = today or datetime.now(timezone.utc).date()
+    out: list[dict] = []
+    for manifest in list_experiments():
+        try:
+            exp = parse_experiment(manifest)
+        except Exception:
+            continue
+        if exp.status not in _STALE_INCLUDED_STATUSES:
+            continue
+        versions = list_versions(exp.slug)
+        if versions:
+            latest = versions[-1]
+            signal_path: Path = version_path(exp.slug, latest)
+        else:
+            latest = None
+            signal_path = manifest
+        try:
+            mtime = signal_path.stat().st_mtime
+        except OSError:
+            continue
+        last_update = datetime.fromtimestamp(mtime, tz=timezone.utc).date()
+        age = (reference - last_update).days
+        if age < min_age_days:
+            continue
+        out.append({
+            "slug": exp.slug,
+            "title": exp.title,
+            "status": exp.status,
+            "latest_version": latest,
+            "days_since_update": age,
+        })
+    return sorted(out, key=lambda h: (-h["days_since_update"], h["slug"]))
+
+
 def weekly_checkin_template(today: date) -> str:
     """Return a markdown skeleton for a weekly mentor check-in.
 
@@ -117,6 +196,12 @@ def weekly_checkin_template(today: date) -> str:
         f"- ✅ On track:\n"
         f"- ⚠️ Drifting:\n"
         f"- ❌ Missing:\n"
+        f"\n"
+        f"## Stale experiments\n"
+        f"\n"
+        f"_Run `mentor.stale_experiments(min_age_days=14)` and paste anything returned._\n"
+        f"\n"
+        f"- ⏳ \n"
         f"\n"
         f"## Done this week\n"
         f"\n"

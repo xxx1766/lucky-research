@@ -1,11 +1,9 @@
 ---
 name: boss-historian
-description: Curates the user's "big boss" (大老板 / group PI) profile and meeting log so the user can prep before each report. Source of truth is `inputs/boss-profile/profile.md` + `inputs/boss-profile/meetings/YYYY-MM-DD.md`; indexed copy lives in AgentDB namespace `project/boss/`. Use during `/boss` commands or whenever the user says "我下周要跟老板汇报", "what does the boss care about", "我上次汇报他说了啥".
+description: Curates the user's "big boss" (大老板 / group PI) profile and meeting log so the user can prep before each report. Source of truth is `inputs/boss-profile/profile.md` + `inputs/boss-profile/meetings/YYYY-MM-DD.md`; indexed copy lives in AgentDB namespace `project/boss/`. Invoked under `/mentor boss …` (canonical) or the `/boss …` alias, or whenever the user says "我下周要跟老板汇报", "what does the boss care about", "我上次汇报他说了啥".
 ---
 
 # boss-historian
-
-> **STATUS**: stub. Frontmatter + workflow contract only. AgentDB indexing pieces deferred until the plugin-wide YAML-frontmatter parser lands (same deferral as `past-work-historian`).
 
 ## Data layout
 
@@ -29,7 +27,9 @@ Helper module: `src/research_assistant/mentor/boss_profile.py` exposes `BossProf
 
 ## When to invoke
 
-- Directly from `/boss` (show / edit / meeting / rehearse / sync).
+- Directly from `/mentor boss …` (canonical) or the `/boss …` alias —
+  subcommands `show / edit / meeting / rehearse / sync` are identical
+  in both forms.
 - User says "我下周要跟老板汇报 / I have a meeting with the boss".
 - User says "老板上次说啥来着 / what did the boss say last time".
 - User says "老板最关心什么 / what does the boss care about".
@@ -189,14 +189,3 @@ mood: "neutral"
 Body sections (free markdown): **What I reported**, **His feedback**, **Action items**
 (checklist), **Followup signals** (what to fold back into the profile).
 
-## Open TODOs
-
-- [ ] Promote rehearsals into a `BossRehearsal` Pydantic model + AgentDB indexing
-      under `project/boss/rehearsals/<date>-<slug>` once the frontmatter parser lands.
-      Today they're disk-only artifacts.
-- [ ] Optional `/boss brief <topic>` mode that auto-generates
-      `outputs/boss/brief-YYYY-MM-DD.md` from profile + recent meetings + user's recent
-      `outputs/` activity. Deferred — current MVP scope is read-only prep.
-- [ ] Optional `/mentor` integration that cross-references user goals against
-      `hot_buttons` to surface "things the boss will probably ask about", and folds
-      `/boss rehearse` weak-spot punchlists into the weekly check-in.

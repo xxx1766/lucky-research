@@ -9,6 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INPUTS_DIR = REPO_ROOT / "inputs"
 OUTPUTS_DIR = REPO_ROOT / "outputs"
+DOCS_DIR = REPO_ROOT / "docs"
 
 PAPERS_INPUT_DIR = INPUTS_DIR / "papers"
 PAST_WORK_DIR = INPUTS_DIR / "past-work"

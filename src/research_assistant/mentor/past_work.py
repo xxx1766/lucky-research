@@ -337,7 +337,7 @@ def list_entries_with_repo() -> list[tuple[Path, PastWorkRepo | None, bool]]:
     return out
 
 
-# ---------- parser stubs (deferred — see boss_profile.parse_profile) ----------
+# ---------- parsers + AgentDB payload ----------
 
 def parse_entry(path: Path) -> PastWorkEntry:
     """Parse a past-work markdown file (YAML frontmatter + body) into a PastWorkEntry.
@@ -373,3 +373,12 @@ def to_agentdb_payload(entry: PastWorkEntry) -> dict:
         "links": list(entry.links),
         "what_i_learned": list(entry.what_i_learned),
     }
+
+
+# Re-export quick-capture helpers (defined in a sibling module to keep this
+# file under the 500-line rule). Done at the bottom because they import from
+# this module at parse time.
+from research_assistant.mentor.past_work_capture import (  # noqa: E402, F401
+    compose_past_work_entry,
+    quick_capture_defaults,
+)

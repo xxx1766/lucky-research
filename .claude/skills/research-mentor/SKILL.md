@@ -1,6 +1,6 @@
 ---
 name: research-mentor
-description: Long-running research mentor (科研导师 / 发展规划). Tracks stated goals, weekly check-ins, blockers, and decisions in AgentDB `project/` namespace; compares recent activity against goals; surfaces trajectory drift and suggests path corrections. Use when the user says "check in", "what should I be working on this week", "am I on track", "回顾本周进度".
+description: Long-running research mentor + boss-prep (科研导师 / 发展规划 / 老板汇报). Tracks self-trajectory (stated goals, weekly check-ins, decisions, drift) AND boss context (profile, meeting log, rehearsal) in AgentDB `project/` namespace. Use when the user says "check in", "what should I be working on this week", "am I on track", "回顾本周进度", or "/mentor boss …" / "/boss …" for boss-prep flows.
 ---
 
 # research-mentor
@@ -8,13 +8,28 @@ description: Long-running research mentor (科研导师 / 发展规划). Tracks 
 > **STATUS**: active. `mentor.diff_goals` + `mentor.weekly_checkin_template` are real;
 > the project-level research-notes triplet (`state.yaml` + `findings.md` + `log.md`)
 > is implemented in `research_assistant.mentor.research_notes`; AgentDB writes go
-> through the MCP `memory_store` tool.
+> through the MCP `memory_store` tool. Boss subcommands delegate to the
+> `boss-historian` agent at `.claude/agents/boss-historian.md`.
 
 ## When to use
 
 - Weekly / biweekly check-ins.
 - User asks "what should I be working on", "is my project on track", "should I pivot".
 - User wants a retro at the end of a sprint / paper / quarter.
+- User runs `/mentor boss …` (or the `/boss …` alias) for boss-prep flows.
+
+## Boss flow (delegation)
+
+When `$ARGUMENTS` starts with `boss`, **strip the leading `boss` token** and
+hand off to the `boss-historian` agent at
+`.claude/agents/boss-historian.md`. That agent owns the workflows for `show`,
+`edit`, `meeting`, `rehearse`, `sync`, and reads/writes
+`inputs/boss-profile/{profile,meetings,reports,rehearsals}` plus AgentDB
+namespace `project/boss/`.
+
+This is a delegation, not a re-implementation — keep all the boss-specific
+prompt logic in the agent file so `/boss` (the alias) and `/mentor boss`
+land in exactly the same place.
 
 ## Workflow
 
@@ -33,14 +48,51 @@ project/backlog             → idea backlog, ranked
 2. Read recent activity signals: new files in `outputs/summaries/`, new
    `outputs/drafts/<slug>/...`, new `ideas/*` entries.
 3. Call `research_assistant.mentor.diff_goals(goals, recent_activity)`.
-4. Surface: ✅ on-track / ⚠️ drifting / ❌ stalled. Suggest 1–3 path corrections.
-5. Write a check-in entry: `outputs/mentor/checkin-YYYY-MM-DD.md` AND
+4. Call `research_assistant.mentor.stale_experiments(min_age_days=14)` —
+   returns `active` experiments whose latest `versions/<vN.M>.md` (or
+   `manifest.md` if no version exists yet) hasn't been touched in 14+ days.
+   Surface them under a ⏳ "Stale experiments" bucket alongside the
+   goal-vs-activity diff. Each row: `slug · latest_version · N days idle`.
+   An experiment can look on-track via the goals diff while quietly stalling
+   here — that's the drift signal this catches.
+5. Surface: ✅ on-track / ⚠️ drifting / ❌ stalled / ⏳ stale-experiments.
+   Suggest 1–3 path corrections.
+6. Write a check-in entry: `outputs/mentor/checkin-YYYY-MM-DD.md` AND
    `mcp__claude-flow__memory_store` into `project/checkins/YYYY-MM-DD`.
 
 ### Goal-setting flow
 
 1. Interactive: ask user for 1–3 long-term goals + their definitions of success.
 2. Persist to `project/goals`.
+
+### Quick capture flow (`/mentor add-past-work [<title>]`)
+
+Optimized for "I just remembered an old project, log it before I forget."
+Stays inside the mentor turn — minimal Q&A, smart defaults, return to the
+check-in.
+
+1. If no `<title>` in args, ask once (plain text, no AskUserQuestion per
+   the `feedback_decision_ui` memory): `"Title for this past-work entry?"`
+2. Compute defaults: `d = mentor.past_work.quick_capture_defaults(title)`.
+   This already runs `next_available_slug`, so the slug is collision-safe.
+3. Plain-text optional probes — ask only one round, accept blank to skip:
+   - `"GitHub repo URL (optional, blank to skip):"` — if given, validate
+     it looks like a git URL and stash it for step 5.
+   - `"One-line abstract (optional):"` — into `d["abstract"]`.
+   - `"Status [in-progress / published / unpublished / abandoned, default
+     in-progress]:"` — override `d["status"]` if non-blank.
+4. `path = mentor.past_work.compose_past_work_entry(**d)` writes the
+   entry to `inputs/past-work/<slug>.md` with `_TODO_` placeholders for
+   anything still empty so the user knows what's left to fill in.
+5. If a GitHub URL was given in step 3:
+   - `mentor.past_work.bind_repo(slug, url)` writes the `repo:` frontmatter.
+   - Plain-text Y/N: `"Clone the repo locally now? [y/N]"`. On `y`, call
+     `mentor.past_work.clone_repo(slug)`. On `N`, leave it `tracked`.
+6. `mcp__claude-flow__memory_store(namespace="project/past-work", key=slug,
+   value=mentor.past_work.to_agentdb_payload(parse_entry(path)))` so the
+   `past-work-historian` agent can recall it during `/paper direction` etc.
+7. Print one line: `"captured: <slug> → inputs/past-work/<slug>.md"`. Hand
+   back to the prior mentor flow if one was in progress.
 
 ### Project-level research notes (`/mentor project ...`)
 
@@ -105,4 +157,3 @@ not a 20-minute timer.
 
 - [ ] Decide check-in cadence (default: every 7 days, configurable).
 - [ ] Decide what counts as "activity" — file mtimes? AgentDB write timestamps?
-- [ ] Decide retro format (planned vs. actual table).

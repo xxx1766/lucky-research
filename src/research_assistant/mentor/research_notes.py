@@ -34,12 +34,12 @@ import yaml
 from pydantic import BaseModel, Field
 
 from research_assistant.common.frontmatter import parse as parse_fm
-from research_assistant.common.io import OUTPUTS_DIR
+from research_assistant.common.io import DOCS_DIR, OUTPUTS_DIR
 
 RESEARCH_NOTES_DIR = OUTPUTS_DIR / "research-notes"
 
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
-_TEMPLATES = Path(__file__).resolve().parents[3] / "docs"
+_TEMPLATES = DOCS_DIR
 
 LogKind = Literal[
     "bootstrap", "inner-loop", "outer-loop", "pivot", "report", "conclude"
