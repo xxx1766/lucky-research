@@ -106,11 +106,63 @@ If `$ARGUMENTS` is empty:
 None — `/migrate` is filesystem-only; AgentDB memory is migrated **inside**
 `ruvector.db`, not via the MCP memory tools.
 
-## Open TODOs
+## Encryption
 
-- [ ] Optional `--encrypt <passphrase>` flag for archives that ride USB
-      sticks. The current archive is plain ZIP (no auth, no encryption).
-- [ ] AgentDB JSONL export/import path so two non-empty `ruvector.db`s can
-      be merged by `namespace+key` rather than only sidecar'd. Today's
-      sidecar behavior matches user-stated preference; the JSONL path is
-      future work.
+`/migrate export --encrypt` AES-encrypts every entry in the resulting
+archive via [`pyzipper`](https://github.com/danifus/pyzipper). The output
+file is still a `.zip` (extension unchanged) so naive file managers see a
+zip; entries are unreadable without the passphrase.
+
+| Flag | Where | Behavior |
+|---|---|---|
+| `--encrypt` | export | Prompt for a passphrase via `getpass` (twice, for confirmation). Never lands in shell history. |
+| `--passphrase-env <VAR>` | export, import | Read passphrase from the named env var instead of prompting. For CI / piped use. Empty / unset env var is a hard error so scripts fail loudly instead of silently producing a plaintext archive. |
+| _(none)_ | import | If the archive is encrypted (detected from zip flag bits), prompt via `getpass`. If unencrypted, ignore even if `--passphrase-env` is given. |
+
+Notes:
+
+- **Filenames stay in plaintext** in the zip central directory — that's how
+  zip works regardless of encryption. The threat model is "USB stick falls
+  out of pocket / archive uploaded to a third-party drive", not "adversary
+  enumerating entries". Don't bake secrets into file paths.
+- **Per-entry compression policy is preserved** under AES — `.pdf`/`.safetensors`
+  still stored, `.md`/`.json` still deflated.
+- **Decryption is one-pass.** `/migrate import` walks the encrypted archive
+  the same way it walks an unencrypted one; the merge policy is unchanged.
+
+## Reindex (rebuilding AgentDB from disk truth sources)
+
+When two machines both have non-empty `ruvector.db`s and need to share
+state, `/migrate import` currently keeps the destination's DB intact and
+lands the source's copy as a `.from-migrate.db` sidecar — no automatic
+content merge (the AgentDB SQLite schema isn't a public contract we want
+to dump + diff against). The right workaround is to **reindex from disk
+truth sources** instead:
+
+```
+python -m research_assistant.migrate reindex [--namespace NS] [--summary]
+```
+
+The command walks every on-disk source that has a structured payload
+helper and emits one `{namespace, key, value, metadata}` dict per record
+as JSONL on stdout. The calling skill prompt reads the JSONL and pipes
+each line into `mcp__claude-flow__memory_store(**payload)`. Coverage:
+
+| Namespace | Truth source |
+|---|---|
+| `project/past-work/<slug>` | `inputs/past-work/<slug>.md` |
+| `project/experiments/<slug>` | `outputs/experiments/<slug>/manifest.md` |
+| `project/experiments/<slug>/versions` | `outputs/experiments/<slug>/versions/<vN.M>.md` |
+| `ideas/<slug>` | `outputs/idea-checks/<slug>/idea.md` |
+| `project/boss/profile` | `inputs/boss-profile/profile.md` |
+| `project/boss/meetings` | `inputs/boss-profile/meetings/<date>.md` |
+| `project/research-notes/<slug>` | `outputs/research-notes/<slug>/state.yaml` |
+
+`papers/<slug>` is intentionally **not** covered — re-summarizing PDFs
+via `/summarize` rebuilds it more reliably than reverse-engineering the
+embedded text. Run `/summarize sync` after the structured reindex.
+
+Use `--summary` to preview counts before piping into a memory_store loop;
+use `--namespace project/experiments` (or any other prefix) to scope a
+partial reindex. Per-file errors are swallowed (one corrupt markdown
+file can't poison the whole pass).

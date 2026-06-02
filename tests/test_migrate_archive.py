@@ -16,6 +16,9 @@ from research_assistant.migrate.archive import (
     db_namespace_row_counts,
     is_db_file,
     is_db_sidecar,
+    is_encrypted_archive,
+    open_archive,
+    read_manifest,
     sha256_of_file,
     wal_checkpoint,
     write_archive,
@@ -221,3 +224,114 @@ def test_write_archive_atomic_rename_on_failure(tmp_path, monkeypatch):
 
     assert not archive_path.exists()
     assert not archive_path.with_suffix(".zip.tmp").exists()
+
+
+# ---------- encryption ----------
+
+def _seed_repo(tmp_path: Path, monkeypatch) -> tuple[Path, list]:
+    repo = tmp_path / "repo"
+    (repo / "inputs" / "papers").mkdir(parents=True)
+    (repo / "outputs").mkdir()
+    monkeypatch.setattr(arch, "REPO_ROOT", repo)
+    pdf = repo / "inputs" / "papers" / "x.pdf"
+    md = repo / "outputs" / "notes.md"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    md.write_text("# notes\nhello secrets\n")
+    items = [
+        FileItem(pdf, "inputs/papers/x.pdf", pdf.stat().st_size),
+        FileItem(md, "outputs/notes.md", md.stat().st_size),
+    ]
+    return repo, items
+
+
+def test_unencrypted_archive_detected_as_not_encrypted(tmp_path, monkeypatch):
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "plain.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo,
+    )
+    assert is_encrypted_archive(archive_path) is False
+
+
+def test_encrypted_archive_detected_via_flag_bits(tmp_path, monkeypatch):
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "enc.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo, passphrase=b"hunter2",
+    )
+    assert is_encrypted_archive(archive_path) is True
+    # The central directory still lists the filenames in plaintext (zip
+    # format) — the entry CONTENTS are what's encrypted.
+    with zipfile.ZipFile(archive_path) as zf:
+        assert "inputs/papers/x.pdf" in zf.namelist()
+        assert "outputs/notes.md" in zf.namelist()
+
+
+def test_encrypted_round_trip_with_correct_passphrase(tmp_path, monkeypatch):
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "enc.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo, passphrase=b"hunter2",
+    )
+    with open_archive(archive_path, passphrase=b"hunter2") as zf:
+        assert zf.read("outputs/notes.md") == b"# notes\nhello secrets\n"
+        manifest = read_manifest(zf)
+    assert {e.path for e in manifest.files} == {"inputs/papers/x.pdf", "outputs/notes.md"}
+
+
+def test_encrypted_archive_rejects_wrong_passphrase(tmp_path, monkeypatch):
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "enc.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo, passphrase=b"hunter2",
+    )
+    with open_archive(archive_path, passphrase=b"wrong-pw") as zf:
+        with pytest.raises(RuntimeError, match="[Bb]ad password"):
+            zf.read("outputs/notes.md")
+
+
+def test_encrypted_archive_unreadable_without_passphrase(tmp_path, monkeypatch):
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "enc.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo, passphrase=b"hunter2",
+    )
+    # Stdlib zipfile (what open_archive returns without passphrase) reads the
+    # central directory fine but raises when extracting an encrypted entry
+    # without a password.
+    with open_archive(archive_path) as zf:
+        with pytest.raises(RuntimeError, match="encrypted"):
+            zf.read("outputs/notes.md")
+
+
+def test_is_encrypted_archive_handles_missing_or_bad_file(tmp_path):
+    assert is_encrypted_archive(tmp_path / "nope.zip") is False
+    bad = tmp_path / "not-a-zip.zip"
+    bad.write_bytes(b"not actually zip")
+    assert is_encrypted_archive(bad) is False
+
+
+def test_encrypted_round_trip_preserves_per_entry_compression(tmp_path, monkeypatch):
+    """AES doesn't change the per-entry compression policy: .pdf still stored,
+    .md still deflated. Catches accidental defaulting to DEFLATE-for-everything
+    in the encrypted writer path.
+
+    AES-encrypted entries surface ``compress_type=99`` to stdlib zipfile (the
+    AES sentinel); the *real* underlying compression is recorded in an extra
+    field that pyzipper unwraps. We inspect via pyzipper here.
+    """
+    pyzipper = pytest.importorskip("pyzipper")
+    repo, items = _seed_repo(tmp_path, monkeypatch)
+    archive_path = tmp_path / "enc.zip"
+    write_archive(
+        archive_path, items, scope=["inputs", "outputs"],
+        excluded_artifacts=[], repo_root=repo, passphrase=b"hunter2",
+    )
+    with pyzipper.AESZipFile(archive_path) as zf:
+        assert zf.getinfo("inputs/papers/x.pdf").compress_type == zipfile.ZIP_STORED
+        assert zf.getinfo("outputs/notes.md").compress_type == zipfile.ZIP_DEFLATED

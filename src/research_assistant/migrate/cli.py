@@ -10,6 +10,8 @@ Two subcommands:
 from __future__ import annotations
 
 import argparse
+import getpass
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +19,7 @@ from pathlib import Path
 from research_assistant.common.io import OUTPUTS_DIR, REPO_ROOT
 from research_assistant.migrate.archive import (
     ArchiveEntry,
+    is_encrypted_archive,
     iter_entries,
     open_archive,
     read_manifest,
@@ -30,6 +33,7 @@ from research_assistant.migrate.manifest import (
     write_external_artifacts,
 )
 from research_assistant.migrate.merge import apply as merge_apply
+from research_assistant.migrate.reindex import cmd_reindex
 from research_assistant.migrate.scan import (
     DEFAULT_UNREGISTERED_THRESHOLD,
     FileItem,
@@ -41,6 +45,42 @@ from research_assistant.migrate.scan import (
 
 MIGRATE_DIR = OUTPUTS_DIR / "migrate"
 IMPORTS_DIR = MIGRATE_DIR / "imports"
+
+
+def _resolve_passphrase(
+    *, encrypt: bool, env_var: str | None, confirm: bool,
+) -> bytes | None:
+    """Decide which passphrase (if any) to use for the archive.
+
+    Three call shapes:
+
+    * ``encrypt=False, env_var=None`` → no passphrase, unencrypted flow.
+    * ``env_var=<NAME>`` → read from ``os.environ`` (non-interactive). Empty
+      env var or unset is an error so CI scripts fail loudly instead of
+      silently producing a plaintext archive.
+    * ``encrypt=True`` (interactive) → prompt with ``getpass`` so the
+      passphrase never lands in shell history; ``confirm=True`` requires
+      the same value twice (for export; import only takes it once).
+    """
+    if env_var:
+        val = os.environ.get(env_var, "")
+        if not val:
+            raise RuntimeError(
+                f"--passphrase-env {env_var} is set but the env var is empty / unset"
+            )
+        return val.encode("utf-8")
+    if not encrypt:
+        return None
+    while True:
+        a = getpass.getpass("Passphrase: ")
+        if not a:
+            raise RuntimeError("empty passphrase")
+        if not confirm:
+            return a.encode("utf-8")
+        b = getpass.getpass("Confirm:    ")
+        if a == b:
+            return a.encode("utf-8")
+        print("Passphrases did not match. Try again.", file=sys.stderr)
 
 
 # ---------- export ----------
@@ -101,6 +141,10 @@ def cmd_export(args: argparse.Namespace) -> int:
         print("\n(dry-run; archive not written)")
         return 0
 
+    passphrase = _resolve_passphrase(
+        encrypt=args.encrypt, env_var=args.passphrase_env, confirm=True,
+    )
+
     archive_name = (
         f"migrate-{_safe_hostname()}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
     )
@@ -108,7 +152,8 @@ def cmd_export(args: argparse.Namespace) -> int:
 
     all_items: list[FileItem] = list(result.must)
 
-    print(f"\nWriting {archive_path} ...")
+    enc_note = " (AES-encrypted)" if passphrase else ""
+    print(f"\nWriting {archive_path}{enc_note} ...")
     outcome = write_archive(
         archive_path,
         all_items,
@@ -116,6 +161,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         excluded_artifacts=result.excluded_artifacts(),
         repo_root=repo_root,
         progress=None,
+        passphrase=passphrase,
     )
 
     print(f"\nDone. {archive_path}")
@@ -142,7 +188,13 @@ def cmd_import(args: argparse.Namespace) -> int:
         return 2
     repo_root = Path(args.repo_root or REPO_ROOT).resolve()
 
-    with open_archive(archive_path) as zf:
+    passphrase: bytes | None = None
+    if is_encrypted_archive(archive_path):
+        passphrase = _resolve_passphrase(
+            encrypt=True, env_var=args.passphrase_env, confirm=False,
+        )
+
+    with open_archive(archive_path, passphrase=passphrase) as zf:
         manifest = read_manifest(zf)
         entries: list[ArchiveEntry] = list(iter_entries(zf, manifest))
         verdicts = merge_apply(
@@ -189,7 +241,6 @@ def _interactive_register(
         f"\nFound {n} file(s) ≥{DEFAULT_UNREGISTERED_THRESHOLD / 1024**3:.0f}GB "
         "in experiments without an external-artifacts.md entry."
     )
-    keep: list[UnregisteredItem] = []
     for i, u in enumerate(result.excluded_unregistered, start=1):
         print()
         print(f"[{i}/{n}] {u.rel_path}")
@@ -216,7 +267,6 @@ def _interactive_register(
         result.excluded_registered.append(
             RegisteredMatch(u.abs_path, u.rel_path, u.size, u.experiment_slug, record)
         )
-        keep.append(u)  # noqa: F841 — accumulated for symmetry, not used downstream
     result.excluded_unregistered = []  # all resolved
     return result
 
@@ -240,7 +290,17 @@ def _prompt_artifact_record(u: UnregisteredItem) -> ArtifactRecord:
     if default_path == ".":
         default_path = u.in_experiment_rel
     path = _prompt(f"        Experiment-relative dir [default: {default_path}]") or default_path
-    default_glob = "model-*.safetensors" if u.in_experiment_rel.endswith(".safetensors") else Path(u.in_experiment_rel).name
+    # Default glob: match the file's extension family when it's a known
+    # multi-shard format (safetensors / bin / pt / ckpt / gguf), otherwise
+    # just the filename itself. We deliberately avoid the HuggingFace-specific
+    # `model-*.safetensors` prefix — user shards may be named
+    # `pytorch_model-*.bin`, `checkpoint-*.safetensors`, etc.
+    file_name = Path(u.in_experiment_rel).name
+    suffix = Path(file_name).suffix.lower()
+    if suffix in {".safetensors", ".bin", ".pt", ".ckpt", ".gguf"}:
+        default_glob = f"*{suffix}"
+    else:
+        default_glob = file_name
     glob = _prompt(f"        Glob for files to exclude [default: {default_glob}]") or default_glob
     repo = _prompt("        Source repo / URL (optional)") or None
     revision = _prompt("        Revision / branch / sha (optional)") or None
@@ -274,6 +334,25 @@ def _synthesize_fetch_cmd(
         return f"curl -L -o <experiment>/{dest_in_experiment} {repo}"
     if src == "git-lfs" and repo:
         return f"git lfs clone {repo} <experiment>/{dest_in_experiment}"
+    if src == "s3" and repo:
+        # `aws s3 cp` recursive when the URI looks like a prefix (trailing
+        # "/"); single-object otherwise. ``revision`` has no s3 meaning, so
+        # surface it as a comment rather than dropping it.
+        recursive = " --recursive" if repo.endswith("/") else ""
+        rev_note = f"  # revision: {revision}" if revision else ""
+        return (
+            f"aws s3 cp {repo} <experiment>/{dest_in_experiment}{recursive}"
+            f"{rev_note}"
+        )
+    if src == "other" and repo:
+        # No canonical fetcher for "other" — emit a TODO line with the
+        # user-supplied repo string so the manual command is one edit away
+        # rather than a blank.
+        rev_note = f"  # revision: {revision}" if revision else ""
+        return (
+            f"# TODO: fetch {repo} into <experiment>/{dest_in_experiment}"
+            f"{rev_note}"
+        )
     return f"# resume: re-fetch {dest_in_experiment} (source unknown — fill in manually)"
 
 
@@ -351,12 +430,43 @@ def _build_parser() -> argparse.ArgumentParser:
         "--non-interactive", action="store_true",
         help="Fail (exit 2) if any unregistered ≥threshold files are found.",
     )
+    p_exp.add_argument(
+        "--encrypt", action="store_true",
+        help="AES-encrypt the archive. Prompts for a passphrase via getpass "
+             "(twice, for confirmation). Use --passphrase-env for "
+             "non-interactive callers.",
+    )
+    p_exp.add_argument(
+        "--passphrase-env", metavar="VAR",
+        help="Read the passphrase from this env var instead of prompting. "
+             "Empty / unset env var is a hard error. Implies --encrypt.",
+    )
     p_exp.add_argument("--repo-root", help="Override repo root (testing).")
     p_exp.set_defaults(func=cmd_export)
+
+    p_idx = sub.add_parser(
+        "reindex",
+        help="Re-emit AgentDB payloads from on-disk truth sources as JSONL.",
+    )
+    p_idx.add_argument(
+        "--namespace", metavar="NS",
+        help="Prefix filter on payload namespace "
+             "(e.g. project/experiments, project/boss, ideas, project/past-work).",
+    )
+    p_idx.add_argument(
+        "--summary", action="store_true",
+        help="Print per-namespace counts instead of full JSONL.",
+    )
+    p_idx.set_defaults(func=cmd_reindex)
 
     p_imp = sub.add_parser("import", help="Restore a migrate archive on this machine.")
     p_imp.add_argument("archive", help="Path to migrate-*.zip")
     p_imp.add_argument("--dry-run", action="store_true", help="Plan moves only.")
+    p_imp.add_argument(
+        "--passphrase-env", metavar="VAR",
+        help="Read the passphrase from this env var (non-interactive). "
+             "When omitted, encrypted archives prompt via getpass.",
+    )
     p_imp.add_argument("--repo-root", help="Override repo root (testing).")
     p_imp.set_defaults(func=cmd_import)
     return p

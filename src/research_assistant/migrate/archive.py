@@ -42,6 +42,31 @@ from research_assistant.migrate.scan import (
     FileItem,
 )
 
+# pyzipper is the AES-zip backend used when a passphrase is supplied. Imported
+# at module load so we get a clean ImportError early if missing, but funnelled
+# through ``_import_pyzipper`` so the unencrypted flow still works on machines
+# without it installed (e.g. someone who skipped optional deps).
+try:
+    import pyzipper as _pyzipper
+except ImportError:  # pragma: no cover — only fires when dep is missing
+    _pyzipper = None
+
+
+def _import_pyzipper():
+    """Return the pyzipper module or raise a clear error.
+
+    The encrypt code path needs ``pyzipper`` for AES; the unencrypted path
+    keeps using stdlib ``zipfile`` so the dep is effectively optional at
+    runtime (it's a hard dep in ``pyproject.toml`` but we don't want one
+    user without it installed to silently break the whole tool).
+    """
+    if _pyzipper is None:
+        raise RuntimeError(
+            "encrypted /migrate archives need the `pyzipper` package. "
+            "Run: pip install pyzipper"
+        )
+    return _pyzipper
+
 ARCHIVE_MANIFEST_NAME = "MANIFEST.json"
 
 # Extensions where ZIP_DEFLATE buys ~nothing. Stored verbatim.
@@ -221,6 +246,7 @@ def write_archive(
     excluded_artifacts: list[ExcludedArtifact],
     repo_root: Path | None = None,
     progress: ProgressCB | None = None,
+    passphrase: bytes | None = None,
 ) -> WriteOutcome:
     """Write all ``items`` into a zip at ``output_path``.
 
@@ -228,6 +254,13 @@ def write_archive(
     full success. ``items`` may include DBs and regular files; DB sidecars
     (``-shm`` / ``-wal``) are dropped here at the write boundary in addition
     to the scan step, defensively.
+
+    When ``passphrase`` is given, entries are AES-encrypted via ``pyzipper``
+    (the central directory — filenames + sizes — still ships in plaintext
+    per the zip format, so don't bake secrets into your file paths).
+    Filenames in this tool are gitignored paths like ``inputs/papers/x.pdf``;
+    the threat model is "USB stick falls out of pocket", not "adversary
+    enumerates the archive".
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_suffix(output_path.suffix + ".tmp")
@@ -251,7 +284,7 @@ def write_archive(
             seen_db_paths.add(it.abs_path)
 
     try:
-        with zipfile.ZipFile(tmp, "w", allowZip64=True) as zf:
+        with _open_writer(tmp, passphrase=passphrase) as zf:
             for i, it in enumerate(items_list, start=1):
                 if is_db_sidecar(it.rel_path):
                     # Drop WAL sidecars — they recreate themselves on import.
@@ -289,14 +322,31 @@ def write_archive(
     return WriteOutcome(archive_path=output_path, manifest=manifest)
 
 
+def _open_writer(path: Path, *, passphrase: bytes | None):
+    """Return a ZipFile-shaped writer, AES-encrypted when ``passphrase`` set."""
+    if passphrase is None:
+        return zipfile.ZipFile(path, "w", allowZip64=True)
+    pz = _import_pyzipper()
+    zf = pz.AESZipFile(
+        path, "w", compression=zipfile.ZIP_DEFLATED, encryption=pz.WZ_AES,
+        allowZip64=True,
+    )
+    zf.setpassword(passphrase)
+    return zf
+
+
 def _stream_into_zip(
     zf: zipfile.ZipFile, src: Path, arcname: str, mode: CompressionMode
 ) -> str:
     """Copy ``src`` into ``zf`` at ``arcname`` and return its sha256 digest.
 
     We hash and write in the same chunk loop so we touch the file once.
+    Uses the ZipFile's own ``zipinfo_cls`` when available — pyzipper's
+    ``AESZipFile`` requires an ``AESZipInfo`` rather than a stdlib
+    ``ZipInfo`` so its open() can wire the encryption header per-entry.
     """
-    info = zipfile.ZipInfo.from_file(str(src), arcname=arcname)
+    zinfo_cls = getattr(zf, "zipinfo_cls", zipfile.ZipInfo)
+    info = zinfo_cls.from_file(str(src), arcname=arcname)
     info.compress_type = _zip_compression_for(mode)
     h = hashlib.sha256()
     with zf.open(info, "w", force_zip64=True) as dst, src.open("rb") as f:
@@ -327,9 +377,37 @@ class ArchiveEntry(NamedTuple):
     info: zipfile.ZipInfo
 
 
-def open_archive(path: Path) -> zipfile.ZipFile:
-    """Open ``path`` as a ZipFile in read mode. Caller is responsible for closing."""
-    return zipfile.ZipFile(path, "r", allowZip64=True)
+def is_encrypted_archive(path: Path) -> bool:
+    """True when any entry in the zip uses encryption (flag bit 0).
+
+    Cheap to call — only reads the central directory, not entry contents.
+    Used by ``/migrate import`` to decide whether to prompt for a passphrase.
+    """
+    try:
+        with zipfile.ZipFile(path, "r", allowZip64=True) as zf:
+            return any(info.flag_bits & 0x1 for info in zf.infolist())
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
+def open_archive(path: Path, *, passphrase: bytes | None = None) -> zipfile.ZipFile:
+    """Open ``path`` as a ZipFile in read mode.
+
+    When ``passphrase`` is set, returns a ``pyzipper.AESZipFile`` already
+    primed with the passphrase (read accesses on encrypted entries
+    transparently decrypt). When ``passphrase`` is ``None``, returns stdlib
+    ``zipfile.ZipFile`` — callers wanting auto-detect should check
+    :func:`is_encrypted_archive` first.
+
+    Caller is responsible for closing the returned handle (use it as a
+    context manager).
+    """
+    if passphrase is None:
+        return zipfile.ZipFile(path, "r", allowZip64=True)
+    pz = _import_pyzipper()
+    zf = pz.AESZipFile(path, "r", allowZip64=True)
+    zf.setpassword(passphrase)
+    return zf
 
 
 def read_manifest(zf: zipfile.ZipFile) -> ArchiveManifest:
