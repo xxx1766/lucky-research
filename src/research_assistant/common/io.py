@@ -30,6 +30,19 @@ IDEA_CHECKS_DIR = OUTPUTS_DIR / "idea-checks"
 RESEARCH_NOTES_DIR = OUTPUTS_DIR / "research-notes"
 
 
+def safe_size(p: Path) -> int:
+    """Best-effort :meth:`Path.stat().st_size` — returns 0 on OSError.
+
+    Used by the migrate scanner and the archive walker when classifying or
+    accounting files; a permission glitch on a single inode shouldn't poison
+    the whole run.
+    """
+    try:
+        return p.stat().st_size
+    except OSError:
+        return 0
+
+
 def ensure_dirs() -> None:
     """Idempotently create the inputs/outputs subdirs the package expects."""
     for d in (

@@ -29,6 +29,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
+from research_assistant.common.frontmatter import parse_optional as _parse_fm_optional
 from research_assistant.common.git import (
     git_clone_shallow,
     git_ls_remote_sha,
@@ -39,7 +40,6 @@ from research_assistant.common.git import (
 from research_assistant.common.io import PAST_WORK_DIR
 
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
-_FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
 
 
 # ---------- models ----------
@@ -155,15 +155,19 @@ def list_entries() -> list[Path]:
 # ---------- frontmatter I/O ----------
 
 def _read_frontmatter(path: Path) -> tuple[dict, str]:
-    """Read a markdown file; return ``(frontmatter_dict, body)``."""
+    """Read a markdown file; return ``(frontmatter_dict, body)``.
+
+    Lenient: files without frontmatter return ``({}, body)``; files with
+    frontmatter that fails to parse as a mapping raise (via
+    :func:`common.frontmatter.parse_optional`) so user errors don't get
+    silently coerced to an empty dict.
+    """
     if not path.is_file():
         return {}, ""
-    text = path.read_text(encoding="utf-8")
-    m = _FM_RE.match(text)
-    if not m:
-        return {}, text
-    fm = yaml.safe_load(m.group(1)) or {}
-    return fm, m.group(2)
+    fm, body = _parse_fm_optional(path)
+    if fm is None:
+        return {}, body
+    return fm, body
 
 
 def _write_frontmatter(path: Path, fm: dict, body: str) -> None:

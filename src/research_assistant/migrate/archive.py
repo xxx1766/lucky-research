@@ -372,11 +372,7 @@ def _stream_into_zip(
     return h.hexdigest()
 
 
-def _safe_size(p: Path) -> int:
-    try:
-        return p.stat().st_size
-    except OSError:
-        return 0
+from research_assistant.common.io import safe_size as _safe_size  # noqa: E402, F401
 
 
 # ---------- read ----------

@@ -34,9 +34,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from research_assistant.common.frontmatter import parse as parse_fm
-from research_assistant.common.io import DOCS_DIR, OUTPUTS_DIR
-
-RESEARCH_NOTES_DIR = OUTPUTS_DIR / "research-notes"
+from research_assistant.common.io import DOCS_DIR, RESEARCH_NOTES_DIR
 
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
 _TEMPLATES = DOCS_DIR

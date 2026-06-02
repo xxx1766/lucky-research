@@ -6,17 +6,15 @@ skill MD via `mcp__claude-flow__memory_store`, using the dict returned by
 """
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 
 import yaml
 
+from research_assistant.common.frontmatter import parse as parse_fm
 from research_assistant.common.io import FIGURE_REFS_DIR
 from research_assistant.figures.schema import FigureRef
 
-# CRLF-tolerant frontmatter regex — consistent with note.py (Task 4 review).
-_FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
 _STAGING_NAME = "staging"
 
 
@@ -43,11 +41,7 @@ def add_ref(image_path: Path, ref: FigureRef, *, force: bool = False) -> Path:
 def read_ref(slug: str) -> FigureRef:
     """Parse inputs/figure-refs/<slug>/note.md back into a FigureRef."""
     note_path = FIGURE_REFS_DIR / slug / "note.md"
-    text = note_path.read_text(encoding="utf-8")
-    m = _FM_RE.match(text)
-    if not m:
-        raise ValueError(f"{note_path} has no YAML frontmatter")
-    fm = yaml.safe_load(m.group(1)) or {}
+    fm, _body = parse_fm(note_path)
     return FigureRef.model_validate(fm)
 
 

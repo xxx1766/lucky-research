@@ -374,8 +374,4 @@ def _file_item(fpath: Path, rel: str, *, size: int | None = None) -> FileItem:
     return FileItem(fpath, rel, size if size is not None else _safe_size(fpath))
 
 
-def _safe_size(p: Path) -> int:
-    try:
-        return p.stat().st_size
-    except OSError:
-        return 0
+from research_assistant.common.io import safe_size as _safe_size  # noqa: E402, F401
