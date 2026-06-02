@@ -260,25 +260,41 @@ def render_progress_board(venue: str, direction: str, status: StageStatus) -> st
     return "\n".join(lines)
 
 
+_CURSOR_NS = "project/paper-context"
+_CURSOR_KEY = "current"
+
+
 def current_context() -> tuple[str | None, str | None]:
     """Read project/paper-context from AgentDB.
 
     By-design Python stub: the cursor lives in AgentDB and the skill reads it
-    via MCP (`mcp__claude-flow__memory_retrieve`) before calling other helpers.
-    No Python caller should hit this; the function exists only to anchor the
-    docstring contract for skill authors.
+    via MCP (``mcp__claude-flow__memory_retrieve``) before calling other
+    helpers. No Python caller should hit this; the function exists only to
+    anchor the docstring contract for skill authors.
+
+    The error message names the exact MCP call and the agentic-flow CLI
+    equivalent so a stuck Python REPL / test session can still inspect what
+    cursor is set without bouncing into a skill.
     """
     raise RuntimeError(
-        "current_context is intentionally Python-stubbed — skills must call "
-        "mcp__claude-flow__memory_retrieve(namespace='project', key='paper-context.current')"
+        "current_context is intentionally Python-stubbed — the cursor lives "
+        "in AgentDB. Read it from:\n"
+        f"  - inside a skill: mcp__claude-flow__memory_retrieve(namespace='{_CURSOR_NS}', key='{_CURSOR_KEY}')\n"
+        f"  - from the shell: npx @claude-flow/cli@latest memory retrieve "
+        f"--namespace {_CURSOR_NS} --key {_CURSOR_KEY}"
     )
 
 
 def set_context(venue: str, direction: str | None) -> None:
-    """Write project/paper-context to AgentDB. See `current_context` for rationale."""
+    """Write project/paper-context to AgentDB. See :func:`current_context`."""
     raise RuntimeError(
-        "set_context is intentionally Python-stubbed — skills must call "
-        "mcp__claude-flow__memory_store(namespace='project', key='paper-context.current')"
+        "set_context is intentionally Python-stubbed — the cursor lives in "
+        "AgentDB. Write it from:\n"
+        f"  - inside a skill: mcp__claude-flow__memory_store(namespace='{_CURSOR_NS}', "
+        f"key='{_CURSOR_KEY}', value={{'venue': {venue!r}, 'direction': {direction!r}}})\n"
+        f"  - from the shell: npx @claude-flow/cli@latest memory store "
+        f"--namespace {_CURSOR_NS} --key {_CURSOR_KEY} "
+        f"--value '{{\"venue\": {venue!r}, \"direction\": {direction!r}}}'"
     )
 
 
