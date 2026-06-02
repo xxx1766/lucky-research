@@ -153,7 +153,14 @@ not a 20-minute timer.
 - `project/research-notes/<slug>` — write (on `init` and `sync`)
 - `papers/*`, `ideas/*`, `drafts/*` — read (recent-activity signal)
 
-## Open enhancements
+## Conventions (settled defaults)
 
-- [ ] Decide check-in cadence (default: every 7 days, configurable).
-- [ ] Decide what counts as "activity" — file mtimes? AgentDB write timestamps?
+- **Check-in cadence**: every 7 days. The skill never auto-fires; `/mentor`
+  is user-initiated. The cadence is what the check-in template promises ("last
+  week's") and what `stale_experiments(min_age_days=14)` uses as a sensible
+  multiple.
+- **Activity signal**: file mtimes under `outputs/summaries/`,
+  `outputs/drafts/`, `outputs/papers/`, `outputs/idea-checks/`, and
+  `outputs/experiments/*/versions/*.md` (used by `stale_experiments`). AgentDB
+  write timestamps are NOT used — the on-disk truth is the canonical record
+  and survives migrations / AgentDB rebuilds.

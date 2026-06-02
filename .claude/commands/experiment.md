@@ -50,10 +50,13 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
 - `/experiment data list [--category <c>]` — filtered table from `data/index.md`.
 - `/experiment artifacts list` — print this experiment's `external-artifacts.md`
   (records of externally-reproducible files excluded from `/migrate export`).
-- `/experiment artifacts register <path> --source hf|http|git-lfs|s3|other
-  [--repo <ref>] [--revision <sha>] [--name <short>] [--glob <pat>]
-  [--size <est>] [--fetch-cmd '...']` — append one external-artifact record.
-  Synthesizes a default `fetch-cmd` from `--source` + `--repo` if not given.
+- `/experiment artifacts register --name <short> --path <path>
+  [--source huggingface|http|git-lfs|s3|other] [--repo <ref>]
+  [--revision <sha>] [--glob <pat>] [--size <est>] [--fetch-cmd '...']` —
+  append one external-artifact record. `--name` and `--path` are required.
+  For `--source` other than `other`, a default `fetch-cmd` is synthesized
+  from `--source` + `--repo`; `--source other` writes a `# TODO: fetch …`
+  placeholder you fill in by hand.
 - `/experiment artifacts scan [--threshold <bytes>]` — walk the experiment
   dir for ≥threshold files (default 1 GiB) not already registered and
   interactively prompt the user about each one.

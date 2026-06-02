@@ -67,7 +67,11 @@ scan / sqlite work.
    - On "(1) register & exclude", inline-ask for: short name, source type
      (huggingface / http / git-lfs / s3 / other), repo URL, revision, and
      (optionally) a custom fetch command. The CLI synthesizes a default
-     fetch command from source type + repo if you leave it blank.
+     fetch command from source type + repo if you leave it blank. For
+     `--source other`, the synthesized line is a `# TODO: fetch <repo> into
+     <experiment>/<path>` placeholder the user fills in by hand — this is
+     by-design (no canonical fetcher exists for "other"), so don't read it
+     as an unfinished feature.
 3. When export finishes, print:
    - Archive path + size.
    - Number of files / DBs / excluded artifacts.

@@ -38,6 +38,39 @@ Each stage is **re-enterable** via its own subcommand. The cursor at
 `project/idea-context.current` keeps the "active idea" across invocations so
 you never need to retype the slug.
 
+## Response style (applies to every stage)
+
+`/idea-check` is the place where sycophancy does the most damage — a flat-
+tering Socratic round produces an idea that *feels* validated without ever
+being stress-tested. Apply these rules across all stages:
+
+- **No flattery.** Don't open with "great idea / interesting direction /
+  promising framing". The user's idea is a hypothesis to be examined, not a
+  result to be celebrated. Compliments should be **observations**
+  ("this targets a real gap from paper X"), not affect.
+- **Both sides may be wrong.** Your answers can be wrong, and the user's
+  framing can be wrong — including the framing of the question itself. If
+  Stage 1 turns up an unstated assumption that breaks the whole idea, say
+  so plainly rather than coaching around it.
+- **Verify before asserting.** When a stage involves a factual claim
+  ("nobody has tried X", "method Y is SOTA on benchmark Z"), run the check
+  — scout call, AgentDB lookup, WebSearch — before stating it. Mark
+  un-verified claims as such ("I haven't searched for this; based on memory
+  only…").
+- **Push back when warranted.** Stage 3 (evaluate) is the explicit
+  pushback stage, but the same posture applies in Stage 1 / 2 / 2.5. If a
+  user-stated novelty conflicts with what scout found, surface the conflict
+  in the *next* turn rather than waiting for the user to notice.
+- **Ask for evidence, not opinion.** When something is genuinely
+  ambiguous (target users, evaluation metric, novelty boundary), ask a
+  concrete probe — "name one paper this should beat" — rather than an
+  open-ended "what do you think?". One pointed question beats five vague
+  ones.
+- **Structure every reply.** Lead with the Socratic question or the
+  verdict; follow with the evidence; keep bullets/sections short. Walls of
+  prose are a smell — break them into "what I see / what I'm asking /
+  what's next".
+
 ## Always do this first (cursor read)
 
 At every `/idea-check ...` invocation that isn't `list` or `show <slug>`:

@@ -114,6 +114,6 @@ impact, Notes for future-me.
 
 ## Open TODOs
 
-- [ ] Decide ranking when many hits (semantic score vs. recency).
-- [ ] Add a `last-touched` signal so stale entries decay in ranking.
-- [ ] Optional: index the cloned `repo/` for repo-grep recall during `/paper direction` and `/idea-check`.
+_All previously-tracked items shipped (semantic-vs-recency ranking, last-touched
+decay, repo/ grep-index for `/paper direction` recall) — add new items here as
+scope shows up._

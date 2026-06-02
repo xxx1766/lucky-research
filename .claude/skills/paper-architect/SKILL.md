@@ -5,7 +5,7 @@ description: Multi-stage paper output flow — venue setup, direction discussion
 
 # paper-architect
 
-> **STATUS**: active. Stage-by-stage rollout substantially complete; see Open TODOs for remaining items.
+> **STATUS**: active. All stage work shipped. `## Open TODOs` at the bottom of this file is currently empty — add new items there as scope shows up.
 
 ## Mental model
 

@@ -47,10 +47,17 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 - `papers/<slug>` — read (bibinfo lookup); written when step 3 fetches a new
   entry via `publisher_bibtex`.
 
-## Open enhancements
+## Conventions (settled defaults)
 
-- [ ] Decide BibTeX citation-key convention (`firstauthorYYYYkeyword`).
-- [ ] Decide CSL/style preference (chicago / ieee / acm / neurips).
+- **BibTeX citation key**: `firstauthorYYYYkeyword` — e.g.
+  `vaswani2017attention`. `merge_bibtex` preserves whatever key the source
+  entry carries; the convention only governs keys we mint ourselves when a
+  publisher feed omits one. Override per-venue by editing the entry in
+  `<direction>/refs.bib` after the merge.
+- **CSL / style**: `ieee` for tech venues (default), `acm` for ACM venues
+  (SIGCOMM / OSDI / SOSP / NSDI / SIGMOD / VLDB), `neurips` for ML venues.
+  The venue's own `_template/` `.bst` always wins when one is present; this
+  default only applies when no template ships.
 
 (Pandoc-on-PATH check shipped — `convert_document` raises a friendly
 `RuntimeError` with the install hint when `pandoc` is missing.)

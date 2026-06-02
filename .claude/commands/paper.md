@@ -59,8 +59,8 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
   current direction (also persisted to `<direction>/status.md`). Pass an explicit
   `<venue>/<direction>` to target a specific folder and adopt it as the new cursor
   (recovery path for in-flight projects). Pass `--all` to walk every venue/direction
-  and refresh each `status.md`. Auto soft-restores missing symlinks if their
-  experiment repos are present locally.
+  and refresh each `status.md`. Read-only over the on-disk state — to recreate a
+  broken bind symlink, run `/paper restore` (or `/paper restore --all`).
 - `/paper archive [<venue>/<direction>] [--abandoned]` — move a finished paper
   out of the active `outputs/papers/` tree into
   `inputs/past-work/<slug>/paper/`, and auto-create (or merge into) a

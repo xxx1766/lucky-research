@@ -5,7 +5,7 @@ description: Design and run experiments bound to a GitHub repo. Tracks the bound
 
 # experiment-runner
 
-> **STATUS**: active. Stage-by-stage rollout complete (see Open TODOs at the bottom).
+> **STATUS**: active. All stage work shipped. `## Open TODOs` at the bottom of this file is currently empty — add new items there as scope shows up.
 
 ## Mental model
 
@@ -344,15 +344,16 @@ body, not by the CLI).
 `external-artifacts.md` as a record-by-record summary. No-op if the file is
 absent.
 
-**`/experiment artifacts register <path> --source huggingface|http|git-lfs|s3|other
-[--repo <ref>] [--revision <sha>] [--name <short>] [--glob <pat>]
-[--size <est>] [--fetch-cmd '...']`**: append one record to the experiment's
-`external-artifacts.md`. The skill body collects any missing required fields
+**`/experiment artifacts register --name <short> --path <path>
+[--source huggingface|http|git-lfs|s3|other] [--repo <ref>] [--revision <sha>]
+[--glob <pat>] [--size <est>] [--fetch-cmd '...']`**: append one record to the
+experiment's `external-artifacts.md`. CLI requires `--name` and `--path` (named,
+not positional). The skill body collects any missing required fields
 interactively (plain-text Q&A — no AskUserQuestion per the
 `feedback_decision_ui` memory) before shelling out:
 
 1. Resolve the experiment slug from the cursor.
-2. Default `--name` to the basename of `<path>` if missing.
+2. If `--name` is missing, default it to the basename of `--path`.
 3. Default `--glob` to `*` (everything under the path).
 4. Default `--fetch-cmd` is synthesized from `--source` + `--repo` (and
    `--revision` where it carries meaning):
