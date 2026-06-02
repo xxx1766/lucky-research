@@ -10,6 +10,7 @@ Invoke the `figure-tool` skill in the mode matching `$ARGUMENTS`.
 ## Subcommands
 
 - `/figure new <slug>` — interactive 6-step generation (intent → kind → refs → size → palette → render). Writes `<slug>.{svg,pdf,png}` plus `<slug>.note.md` to the resolved scope's figures dir.
+- `/figure recommend` — read-only chart-type suggester. Takes a pasted data snippet + one-sentence intent, applies the 19-chart academic-library prompt adapted from awesome-ai-research-writing, prints 推荐方案 + 核心理由 + 视觉设计规范, and hands off to `/figure new <slug>`. Does not write any file.
 - `/figure list` — table of all figures in current paper / experiment scope.
 - `/figure render <slug>` — re-export PDF + PNG from the (possibly hand-edited) source SVG. For data figures, re-run `plot_<slug>.py`.
 - `/figure render --all` — batch re-render every figure in the current scope.

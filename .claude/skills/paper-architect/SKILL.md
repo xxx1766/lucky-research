@@ -514,10 +514,18 @@ When the section being drafted needs a figure:
 \begin{figure}[t]
   \centering
   \includegraphics[width=<W>]{figures/<slug>.pdf}
-  \caption{<from the figure's note.md `intent:` — user-editable>}
+  \caption{<polished English caption — see Caption format below>}
   \label{fig:<slug>}
 \end{figure}
 ```
+
+The caption argument follows
+`references/latex-conventions.md` section `tables-and-figures` →
+"Caption format": noun phrase = Title Case (no period), complete sentence =
+Sentence case (with period); no `The figure shows ...` openers; no
+`showcase` / `depict`. When the figure's `note.md` `intent:` is Chinese,
+polish it to an English caption per those rules before pasting — don't
+emit raw Chinese into `\caption{...}`.
 
 `<W>` is chosen from the figure's `size.preset`:
 

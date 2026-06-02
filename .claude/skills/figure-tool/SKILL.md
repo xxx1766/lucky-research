@@ -54,6 +54,7 @@ Call `research_assistant.figures.paths.resolve_scope(paper_ctx=..., experiment_c
 | Subcommand | Action |
 |---|---|
 | `new <slug>` | Run the 6-step interactive flow (below). |
+| `recommend` | Suggest the right academic chart type from a pasted data snippet + one-sentence intent. Reads `references/chart-recommender-prompt.md` (19-chart library) and prints a structured recommendation; hands off to `/figure new <slug>` for actual generation. |
 | `list` (default) | `ls figures/*.pdf` under current scope; render a table with slug + kind + size + created. |
 | `render <slug>` | `figures.export.export(svg_path)`. If the source is a matplotlib script, exec it instead. |
 | `render --all` | walk current scope's `figures/**/*.svg` and `**/plot_*.py`; export each. Summary table at end. |
@@ -63,6 +64,26 @@ Call `research_assistant.figures.paths.resolve_scope(paper_ctx=..., experiment_c
 | `ref list [--kind k] [--tag t]` | Read `research_assistant.figures.refs.list_refs()`, parse each via `read_ref(slug)`, filter, table. |
 | `ref sync` | Walk `inputs/figure-refs/*/note.md`; for each, `to_agentdb_payload(ref)` → `mcp__claude-flow__memory_store`. |
 | `ref show <slug>` | Print note.md + absolute image path. |
+
+## `/figure recommend` flow
+
+A read-only decision-support subcommand. Does not write any file; prints a
+recommendation and surfaces the natural next call (`/figure new <slug>`).
+
+1. Resolve scope (cursor reads above) — needed only for the palette hint in
+   the recommendation. Do **not** error on `NoScopeError`; the recommender
+   is useful even before a paper or experiment exists.
+2. Collect inputs (plain text, no `AskUserQuestion` per the
+   `feedback_decision_ui` memory):
+   - **Data snippet** — paste an Excel/CSV table, or a 2–3 line description
+     of variables, axes, sample count, distribution shape.
+   - **Core conclusion** — one sentence on what the figure must demonstrate.
+3. Read `references/chart-recommender-prompt.md` as the prompt prelude
+   (it embeds the 19-chart academic library verbatim).
+4. Apply the prompt with the stitched `# Input` block.
+5. Print the model's four-section response (推荐方案 · 核心理由 · 视觉设计
+   规范) and the hand-off line: `Next: /figure new <slug>  (kind=data,
+   chart=<推荐>)`.
 
 ## `/figure new` 6-step flow
 
@@ -188,6 +209,17 @@ and again when `/paper write` drafts the surrounding section):
 * Quantify any claim that the figure shows a `good` or `better` result. State
   the metric and the magnitude.
 * Define every acronym in the caption on first use within the caption.
+* **Format rules** (from `paper-architect/references/latex-conventions.md`
+  section `tables-and-figures` → "Caption format"): decide case by syntax —
+  noun phrase = Title Case, no period; complete sentence = Sentence case,
+  end with period. Don't open with `The figure shows ...` / `This diagram
+  illustrates ...`. Don't use `showcase` / `depict`. No `Figure 1:` prefix
+  in the source.
+* **Chinese intent → English caption.** Step 1 collects `intent:` as one
+  Chinese sentence. When emitting the LaTeX snippet, **polish the intent to
+  an English caption per the rules above** — do not paste the raw Chinese.
+  Persist both: `intent:` in `note.md` stays Chinese (for future recall);
+  the `\caption{...}` argument is the polished English.
 
 ## Reference intake — `/figure ref add`
 

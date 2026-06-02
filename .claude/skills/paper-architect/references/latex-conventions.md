@@ -114,6 +114,40 @@ and are enforced by a post-write grep (see SKILL.md Stage 6).
 - **Do:** prefer visual encodings (shape, position, line style) over text
   labels for repeated information.
 
+### Caption format (figures and tables)
+
+These rules apply to every `\caption{...}` line — whether produced by
+`/figure new`, `/paper write`, or hand-edited. They are adapted from
+[awesome-ai-research-writing](https://github.com/Leey21/awesome-ai-research-writing)
+"生成图的标题" / "生成表的标题" entries.
+
+- **Do:** decide case by syntax. A **noun phrase** uses Title Case (every
+  content word capitalized) with **no trailing period**. A **complete
+  sentence** uses Sentence case (only the first word + proper nouns
+  capitalized) and **ends with a period**.
+  - Noun phrase: `Architecture of KPred`
+  - Sentence: `KPred achieves a 3.2x speedup over the prior best.`
+- **Don't:** open a caption with `The figure shows ...`, `This diagram
+  illustrates ...`, `In this figure we present ...`. Start directly with
+  the subject: `Architecture of ...`, `Performance comparison of ...`,
+  `Visualization of ...`.
+- **Don't:** use `showcase`, `depict`, or other padding vocabulary. Use
+  `show`, `compare`, `present`, `report` instead.
+- **Do:** prefer the standard table-title patterns when they fit:
+  `Comparison with ...`, `Ablation study on ...`, `Results on ...`,
+  `Effect of ... on ...`. These read as familiar to a reviewer skimming
+  the table of contents.
+- **Don't:** include the `Figure 1:` / `Table 1:` prefix in the source —
+  `\caption{...}` and the figure/table counter handle that automatically.
+  The caption argument carries only the content.
+- **Do:** escape `%`, `_`, `&` inside the caption argument. Keep `$...$`
+  math intact.
+- **Cross-skill enforcement:** when `/figure new` Step 6 collects an
+  `intent:` line in Chinese, polish it to an English caption per these
+  rules before emitting the LaTeX `\caption{...}` snippet. When
+  `/paper write` drafts a section that includes a figure or table, it
+  applies these rules to every new caption it writes.
+
 ---
 
 ## section: word-choice-and-grammar
