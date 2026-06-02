@@ -35,6 +35,16 @@ def paper_figures_dir(venue: str, direction: str) -> Path:
 
 
 def experiment_figures_dir(slug: str, *, version: str | None) -> Path:
+    """Return the figures dir inside an experiment.
+
+    With ``version`` (e.g. ``"v1.0"``) → ``repo/figures/<version>/``.
+    Without it → ``repo/figures/_arch/`` — the fallback bucket for figures
+    drafted *before* the first ``/experiment version add``. (The pseudocode
+    twin, :func:`research_assistant.pseudocode.paths.experiment_algorithms_dir`,
+    uses ``_unversioned/`` for the same semantic — the bucket names differ
+    for historical reasons; both stay as-is to avoid silently relocating
+    user data.)
+    """
     base = EXPERIMENTS_DIR / slug / "repo" / "figures"
     return base / version if version else base / "_arch"
 

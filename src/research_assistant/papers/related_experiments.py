@@ -22,7 +22,7 @@ from research_assistant.experiments import (
     parse_experiment,
     result_path,
 )
-from research_assistant.papers.binding import read_binding_from_expert_md
+from research_assistant.papers.binding import read_all_bindings_from_expert_md
 
 
 def find_experiments_for_paper(venue: str, direction: str) -> list[dict]:
@@ -39,9 +39,13 @@ def find_experiments_for_paper(venue: str, direction: str) -> list[dict]:
     the experiments dir is missing, so no eager existence check is needed
     here (and adding one would defeat monkeypatching of
     ``common.io.EXPERIMENTS_DIR`` in tests).
+
+    Reads both the singular ``experiment:`` and the plural ``experiments:``
+    fields from ``expert.md`` so additional bindings set by Stage 0 don't
+    silently disappear.
     """
     needle = f"{venue}/{direction}"
-    bound_primary = read_binding_from_expert_md(venue, direction)
+    expert_bindings = set(read_all_bindings_from_expert_md(venue, direction))
 
     hits: dict[str, dict] = {}
     for manifest in list_experiments():
@@ -50,10 +54,10 @@ def find_experiments_for_paper(venue: str, direction: str) -> list[dict]:
         except Exception:
             continue
         manifest_match = needle in (exp.papers or [])
-        primary_match = bound_primary == exp.slug
-        if not (manifest_match or primary_match):
+        expert_match = exp.slug in expert_bindings
+        if not (manifest_match or expert_match):
             continue
-        if manifest_match and primary_match:
+        if manifest_match and expert_match:
             source = "both"
         elif manifest_match:
             source = "manifest"

@@ -55,8 +55,9 @@ _DOI_URL_PREFIXES: tuple[str, ...] = (
     "http://dx.doi.org/",
     "doi.org/",
     "doi:",
-    "DOI:",
 )
+# `DOI:` (uppercase) is folded into `doi:` by the case-insensitive match in
+# :func:`normalize_doi`, so it's not listed separately.
 
 _BIBTEX_HEAD_RE = re.compile(r"^\s*@\w+\s*\{", re.MULTILINE)
 
@@ -120,6 +121,39 @@ def looks_like_bibtex(text: str | bytes | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Shared HTTP helper for tier 1 + tier 2 (CrossRef + doi.org)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_bibtex_http(url: str, *, accept: str, timeout: float) -> str | None:
+    """GET ``url`` with the given ``Accept`` header; return BibTeX or ``None``.
+
+    Shared body for tier 1 (CrossRef) and tier 2 (doi.org). Caps the read at
+    :data:`_MAX_BIBTEX_BYTES` so a misbehaving server can't memory-bomb us,
+    sniffs the body with :func:`looks_like_bibtex`, and never raises for
+    network-level errors.
+    """
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": accept,
+            "User-Agent": _USER_AGENT,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            body = resp.read(_MAX_BIBTEX_BYTES)
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        return None
+    if not looks_like_bibtex(body):
+        return None
+    try:
+        return body.decode("utf-8").strip() or None
+    except UnicodeDecodeError:
+        return body.decode("utf-8", errors="replace").strip() or None
+
+
+# ---------------------------------------------------------------------------
 # Tier 1 — CrossRef content-negotiation endpoint
 # ---------------------------------------------------------------------------
 
@@ -139,28 +173,8 @@ def fetch_bibtex_via_crossref(doi: str, *, timeout: float = 15.0) -> str | None:
         bare = normalize_doi(doi)
     except ValueError:
         return None
-
     url = f"https://api.crossref.org/works/{bare}/transform/application/x-bibtex"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/x-bibtex",
-            "User-Agent": _USER_AGENT,
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            # Cap the read so a misbehaving server can't memory-bomb us.
-            body = resp.read(_MAX_BIBTEX_BYTES)
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
-        return None
-
-    if not looks_like_bibtex(body):
-        return None
-    try:
-        return body.decode("utf-8").strip() or None
-    except UnicodeDecodeError:
-        return body.decode("utf-8", errors="replace").strip() or None
+    return _fetch_bibtex_http(url, accept="application/x-bibtex", timeout=timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -178,29 +192,12 @@ def fetch_bibtex_via_doi_content_negotiation(doi: str, *, timeout: float = 15.0)
         bare = normalize_doi(doi)
     except ValueError:
         return None
-
     url = f"https://doi.org/{bare}"
-    req = urllib.request.Request(
+    return _fetch_bibtex_http(
         url,
-        headers={
-            "Accept": "application/x-bibtex; q=1.0, application/x-bibtex-thread-safe; q=0.5",
-            "User-Agent": _USER_AGENT,
-        },
+        accept="application/x-bibtex; q=1.0, application/x-bibtex-thread-safe; q=0.5",
+        timeout=timeout,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            # Cap the read — publishers that refuse content negotiation often
-            # serve a big HTML landing page instead.
-            body = resp.read(_MAX_BIBTEX_BYTES)
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
-        return None
-
-    if not looks_like_bibtex(body):
-        return None
-    try:
-        return body.decode("utf-8").strip() or None
-    except UnicodeDecodeError:
-        return body.decode("utf-8", errors="replace").strip() or None
 
 
 # ---------------------------------------------------------------------------

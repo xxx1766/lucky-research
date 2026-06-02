@@ -308,7 +308,12 @@ def append_figures_to_version(
     "experiment version add link-back".
     """
     import yaml
-    version_path_ = _exp.EXPERIMENTS_DIR / slug / "versions" / f"{version}.md"
+    # Go through the canonical version_path resolver — it validates the
+    # semver and enforces the `_guard_under` traversal guard every other
+    # path helper uses (previously this function rebuilt the path inline
+    # and skipped both checks).
+    from .paths import version_path
+    version_path_ = version_path(slug, version)
     if not version_path_.exists():
         raise FileNotFoundError(version_path_)
     text = version_path_.read_text(encoding="utf-8")

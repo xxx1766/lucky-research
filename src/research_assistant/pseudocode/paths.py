@@ -46,10 +46,15 @@ def experiment_algorithms_dir(slug: str, *, version: str | None) -> Path:
 
     With ``version`` (e.g. ``"v1.0"``) → ``repo/algorithms/<version>/``.
     Without it → ``repo/algorithms/_unversioned/`` — the fallback for
-    algorithms drafted *before* the first `/experiment version add`. Once
+    algorithms drafted *before* the first ``/experiment version add``. Once
     the experiment has versioned runs, callers should always pass an
     explicit ``version``; ``_unversioned`` files stay where they were and
     can be moved manually if the user decides to retroactively pin them.
+
+    (The figure twin, :func:`research_assistant.figures.paths.experiment_figures_dir`,
+    uses ``_arch/`` for the same semantic — the bucket names differ for
+    historical reasons; both stay as-is to avoid silently relocating user
+    data.)
     """
     base = EXPERIMENTS_DIR / slug / "repo" / "algorithms"
     return base / version if version else base / "_unversioned"

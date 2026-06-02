@@ -7,6 +7,7 @@ parser stubs so this can survive partial/malformed files.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -40,12 +41,19 @@ class ExperimentStatus:
     has_analysis: bool = False
 
 
+_MANIFEST_FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---", re.DOTALL)
+
+
 def stage_status(slug: str) -> ExperimentStatus:
     """Inspect ``<slug>/`` on disk; tolerate every file/dir missing.
 
-    Uses cheap text heuristics (``"url:"``, ``"papers:"``) rather than YAML
-    parsing, matching the deferred-frontmatter-parser policy elsewhere.
+    Reads the manifest's YAML frontmatter directly (no full pydantic
+    validation) so ``has_repo`` / ``has_papers_bound`` survive partial /
+    in-progress manifests AND ignore commented-out lines and inline-flow
+    YAML that the old substring heuristics misread.
     """
+    import yaml
+
     exp_dir = experiment_path(slug)
     manifest = manifest_path(slug)
     has_manifest = manifest.is_file()
@@ -54,11 +62,21 @@ def stage_status(slug: str) -> ExperimentStatus:
     last_sync: datetime | None = None
     if has_manifest:
         text = manifest.read_text(errors="replace")
-        has_repo = "url:" in text
-        # papers: followed by at least one "  - " bullet inside a YAML block
-        if "papers:" in text:
-            tail = text.split("papers:", 1)[1].splitlines()[1:6]
-            has_papers_bound = any(line.strip().startswith("- ") for line in tail)
+        fm_match = _MANIFEST_FM_RE.match(text)
+        if fm_match:
+            try:
+                fm = yaml.safe_load(fm_match.group(1)) or {}
+            except yaml.YAMLError:
+                fm = {}
+            if isinstance(fm, dict):
+                repo = fm.get("repo")
+                if isinstance(repo, dict):
+                    has_repo = bool(repo.get("url"))
+                papers = fm.get("papers")
+                if isinstance(papers, list):
+                    has_papers_bound = any(
+                        isinstance(p, str) and p for p in papers
+                    )
         last_sync = datetime.fromtimestamp(manifest.stat().st_mtime)
     references = references_path(slug)
     has_references = references.is_file() and references.stat().st_size > 0

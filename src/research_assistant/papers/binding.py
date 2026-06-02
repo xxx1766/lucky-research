@@ -204,6 +204,35 @@ def read_binding_from_expert_md(venue: str, direction: str) -> str | None:
     return val if isinstance(val, str) and val else None
 
 
+def read_all_bindings_from_expert_md(venue: str, direction: str) -> list[str]:
+    """Return every experiment slug bound to this direction, dedup'd.
+
+    Unions the singular ``experiment:`` field with the optional plural
+    ``experiments:`` list (set by ``/paper bind --additional`` and the
+    paper-architect Stage 0 binding prompt). Order: primary first, then
+    additionals in their original order; duplicates collapsed.
+
+    Returns ``[]`` if expert.md is missing or has no bindings.
+    """
+    expert = direction_path(venue, direction) / "expert.md"
+    if not expert.is_file():
+        return []
+    fm, _ = _read_frontmatter(expert)
+    out: list[str] = []
+    seen: set[str] = set()
+    primary = fm.get("experiment")
+    if isinstance(primary, str) and primary:
+        out.append(primary)
+        seen.add(primary)
+    additional = fm.get("experiments")
+    if isinstance(additional, list):
+        for slug in additional:
+            if isinstance(slug, str) and slug and slug not in seen:
+                out.append(slug)
+                seen.add(slug)
+    return out
+
+
 def _set_expert_md_binding(
     expert_path: Path, *, primary: str, additional: list[str] | None = None,
 ) -> None:

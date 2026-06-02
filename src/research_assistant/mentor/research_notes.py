@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 import yaml
 from pydantic import BaseModel, Field
@@ -44,6 +44,10 @@ _TEMPLATES = DOCS_DIR
 LogKind = Literal[
     "bootstrap", "inner-loop", "outer-loop", "pivot", "report", "conclude"
 ]
+# Runtime mirror of LogKind for use in validation. Sourced from typing so a
+# new entry in the Literal above can never silently drift away from the
+# runtime set.
+_LOG_KIND_VALUES: frozenset[str] = frozenset(get_args(LogKind))
 
 
 # ---------- models ----------
@@ -225,8 +229,10 @@ def append_log(slug: str, kind: LogKind, summary: str, *, today: date | None = N
     The log table sits between the first ``|`` line and the closing
     ``<!-- Entry types: -->`` comment. Rows are numbered starting at 1.
     """
-    if kind not in {"bootstrap", "inner-loop", "outer-loop", "pivot", "report", "conclude"}:
-        raise ValueError(f"unknown log kind: {kind!r}")
+    if kind not in _LOG_KIND_VALUES:
+        raise ValueError(
+            f"unknown log kind: {kind!r}; expected one of {sorted(_LOG_KIND_VALUES)}"
+        )
     summary = summary.strip().replace("|", "\\|")
     if not summary:
         raise ValueError("empty log summary")
