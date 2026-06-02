@@ -51,4 +51,6 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 
 - [ ] Decide BibTeX citation-key convention (`firstauthorYYYYkeyword`).
 - [ ] Decide CSL/style preference (chicago / ieee / acm / neurips).
-- [ ] Confirm pandoc is on PATH; if not, document install in README.
+
+(Pandoc-on-PATH check shipped — `convert_document` raises a friendly
+`RuntimeError` with the install hint when `pandoc` is missing.)

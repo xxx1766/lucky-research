@@ -50,8 +50,11 @@ Helper module: `src/research_assistant/mentor/past_work.py` exposes
    now (`clone_repo(slug)`) or leave as `tracked` for later.
 3. Compose a markdown file matching `docs/past-work-template.md`.
 4. Write to `inputs/past-work/<slug>.md`.
-5. Index in AgentDB: `mcp__claude-flow__memory_store(namespace="project/past-work",
-   key=<slug>, value=<yaml frontmatter as string>)`.
+5. Index in AgentDB: `mcp__claude-flow__memory_store(**mentor.past_work.to_agentdb_payload(mentor.past_work.parse_entry(path)))`.
+   The payload is a flat dict (`namespace=project/past-work, key=<slug>,
+   value=<embeddable text>, metadata=<dict>`) — matches the shape every
+   other `*_to_agentdb_payload` helper returns. **Do not** hand-serialize
+   YAML for `value`; use the helper.
 
 ### Sync (driven by `/past-work sync`)
 1. Walk `inputs/past-work/*.md` via `list_entries()`.

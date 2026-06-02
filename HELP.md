@@ -297,11 +297,14 @@ All archives live in `outputs/migrate/`.
 | `/migrate artifacts register --slug <SLUG> --name ... --path ... [--glob --source --repo --revision --size --fetch-cmd]` | Append one external-artifact record non-interactively. |
 | `/migrate artifacts scan --slug <SLUG> [--threshold BYTES]` | Walk one experiment, prompt-register every unregistered ≥ threshold file. |
 
-- Helpers: `migrate/{cli, cli_artifacts, archive, classify, manifest, merge, repo_walk, scan, reindex, fetch_cmd, passphrase}.py`.
+- Helpers: `migrate/{cli, cli_artifacts, archive, manifest, merge, scan, reindex}.py` (the `_synthesize_fetch_cmd` + `_resolve_passphrase` helpers live inside `cli.py`).
 - Output: `outputs/migrate/migrate-<host>-<ts>.zip`; reports under `outputs/migrate/imports/<stem>.report.md`.
 - Encryption note: filenames remain plaintext in the central directory (pyzipper limitation).
 
-> ⚠️ Known issues: `/migrate status` is documented in SKILL but isn't a CLI verb (subparser `required=True`). The skill prompt has to list archives itself. `/migrate artifacts ...` is shipped but not yet documented in `commands/migrate.md`.
+> ⚠️ Known issues:
+> - `/migrate status` is documented in the SKILL but isn't a CLI verb (subparser `required=True`). The skill prompt lists archives itself by reading `outputs/migrate/`.
+> - `/migrate reindex` covers `project/past-work`, `project/experiments/<slug>/versions`, `ideas/<slug>` (top-level only), `project/boss/{profile,meetings}`, `project/research-notes`, and `project/checkins`. It does **NOT** rebuild `papers/<slug>` (re-run `/summarize`), the per-stage `ideas/<slug>/{socratic,scout,evaluation,...}` sub-keys (skill-driven), or `project/figure-refs` (re-run `/figure ref sync`).
+> - Example: `python -m research_assistant.migrate reindex --namespace project/research-notes --summary` rebuilds just one namespace and prints a one-line count.
 
 ---
 

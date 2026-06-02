@@ -447,7 +447,10 @@ venues first.
 1. Seed = one paper slug or the active idea's slug.
 2. `rows = research_assistant.ideas.build_vertical_lineage(seed, summary_paths)`
    — Claude fills each row's `year` and `relationship` from summaries.
-3. Render to `outputs/idea-checks/<slug>/lineage.md`.
+3. Render `rows` into a Markdown table — there is no
+   `render_vertical_lineage` helper for the legacy mode; the skill prompt
+   composes the table directly from the row dicts. Write the result to
+   `outputs/idea-checks/<slug>/lineage.md`.
 4. `mcp__claude-flow__memory_store` namespace=`ideas`,
    key=`<slug>/lineage`.
 
@@ -502,4 +505,4 @@ venues first.
 * `research_assistant.ideas.knowledge.{KnowledgeIndex, KnowledgeItem, render_knowledge_md, to_agentdb_payload}`
 * `research_assistant.ideas.status.{stage_status, render_status_md}`
 * `research_assistant.ideas.registry.{IdeaManifest, save_idea, load_idea, update_idea, list_ideas, render_index_md, to_agentdb_payload, reindex_from_disk, create_variant_idea}`
-* `research_assistant.lit.sourcing.{PaperRef, search_arxiv}`
+* `research_assistant.lit.sourcing.{PaperRef, search_arxiv, search_openreview, search_for_direction}` (Stage 2 only uses `search_arxiv` directly; `search_for_direction` is the venue-aware dispatcher used by `/paper scout` and `/scout-swarm`.)

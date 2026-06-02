@@ -10,15 +10,20 @@ Truth sources covered, namespace → on-disk artifact:
 * ``project/past-work/<slug>``                 ← ``inputs/past-work/<slug>.md``
 * ``project/experiments/<slug>``               ← ``outputs/experiments/<slug>/manifest.md``
 * ``project/experiments/<slug>/versions``      ← ``outputs/experiments/<slug>/versions/<vN.M>.md``
-* ``ideas/<slug>``                             ← ``outputs/idea-checks/<slug>/manifest.md``
+* ``ideas/<slug>``                             ← ``outputs/idea-checks/<slug>/idea.md``
 * ``project/boss/profile``                     ← ``inputs/boss-profile/profile.md``
 * ``project/boss/meetings``                    ← ``inputs/boss-profile/meetings/<date>.md``
 * ``project/research-notes/<slug>``            ← ``outputs/research-notes/<slug>/state.yaml``
 
-Not covered (intentionally): ``papers/<slug>``. Re-summarizing PDFs is what
-``/summarize`` is for; the same flow indexes ``papers/`` as a side effect.
-Running ``/summarize`` over ``inputs/papers/`` is faster than reverse-
-engineering the summary text from disk.
+Not covered (intentionally):
+
+* ``papers/<slug>``  — re-summarizing PDFs is what ``/summarize`` is for; the
+  same flow indexes ``papers/`` as a side effect. Faster than reverse-
+  engineering the summary text from disk.
+* ``ideas/<slug>/{socratic,brainstorm,scout,contrarian,evaluation,venues,knowledge}``
+  — skill-driven sub-records produced inside ``/idea-check`` stages.
+  Re-running the relevant stage rebuilds them.
+* ``project/figure-refs/<slug>``  — rebuild via ``/figure ref sync``.
 
 The yielded dicts match the shape ``mcp__claude-flow__memory_store`` takes
 as ``**kwargs`` — ``{"namespace": str, "key": str, "value": str, "metadata": dict}``.

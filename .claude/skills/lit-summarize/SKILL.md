@@ -47,6 +47,5 @@ description: Summarize research papers (PDF or arXiv) into structured markdown (
 
 ## Open enhancements
 
-- [ ] Decide the slug format (arxiv id? doi? title hash?).
-- [ ] Decide whether to call GROBID for higher-quality structural parsing.
-- [ ] Define the structured-summary JSON schema (Pydantic model) for downstream consumers.
+_All previously-tracked items deferred indefinitely. Re-open here when
+slug-format / GROBID / structured-schema decisions are needed._

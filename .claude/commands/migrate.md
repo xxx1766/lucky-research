@@ -42,7 +42,7 @@ Invoke the `migrate-tool` skill in the stage matching `$ARGUMENTS`.
   `external-artifacts.md` (the registry of externally-reproducible files
   excluded from `/migrate export`).
 - `/migrate artifacts --slug <SLUG> register --name <NAME> --path <PATH>
-  [--glob <PAT>] [--source hf|http|git-lfs|s3|other] [--repo <REF>]
+  [--glob <PAT>] [--source huggingface|http|git-lfs|s3|other] [--repo <REF>]
   [--revision <SHA>] [--size <BYTES>] [--fetch-cmd '...']` — append one
   external-artifact record non-interactively. Synthesizes a default
   `fetch-cmd` from `--source` + `--repo` if not given. Round-trips with

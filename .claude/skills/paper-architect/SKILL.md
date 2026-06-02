@@ -204,9 +204,10 @@ It walks `outputs/experiments/*/repo/paper/*/*/`, and for each
 real local directories — if a `outputs/papers/<v>/<d>/` already exists as a
 real (non-symlink) dir, the restore for that paper is skipped.
 
-`/paper status` soft-restores missing symlinks automatically — useful when the
-user runs status on a freshly cloned machine before remembering to run
-`/paper restore`.
+When a `(venue, direction)` is missing locally but a clone of the bound
+experiment repo is on disk, run `/paper restore` to recreate the symlinks
+explicitly — `/paper status` does NOT auto-restore (it's read-only over the
+on-disk state).
 
 ## Stage 1 — `/paper venue <slug>`
 
@@ -866,4 +867,6 @@ mentor can detect drift).
 
 ## Open TODOs
 
-- [ ] `/mentor add-past-work` UX.
+_All previously-tracked items shipped. Cross-skill items belong in the
+relevant SKILL (e.g. `/mentor add-past-work` UX is owned by
+`research-mentor/SKILL.md`)._

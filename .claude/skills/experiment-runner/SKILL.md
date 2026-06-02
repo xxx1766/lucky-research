@@ -344,7 +344,7 @@ body, not by the CLI).
 `external-artifacts.md` as a record-by-record summary. No-op if the file is
 absent.
 
-**`/experiment artifacts register <path> --source hf|http|git-lfs|s3|other
+**`/experiment artifacts register <path> --source huggingface|http|git-lfs|s3|other
 [--repo <ref>] [--revision <sha>] [--name <short>] [--glob <pat>]
 [--size <est>] [--fetch-cmd '...']`**: append one record to the experiment's
 `external-artifacts.md`. The skill body collects any missing required fields

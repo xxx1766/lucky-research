@@ -112,9 +112,10 @@ direction as the new cursor without touching `expert.md` or any other artifact.
 | `.claude-flow/CAPABILITIES.md`, `config.yaml` | `.claude-flow/logs/`, `sessions/`, `metrics/` |
 
 Cross-machine transfer is handled by `/migrate`: zip the private side on one machine,
-unzip on the next — collisions never overwrite (renamed to `*.from-migrate-<ts>.*`),
-DBs are reindexed from on-disk truth via `/migrate reindex` after import. AES-256
-encryption is opt-in (`--encrypt --passphrase-env VAR`).
+unzip on the next — collisions never overwrite (renamed to `*.from-migrate-<ts>.*`).
+Most AgentDB namespaces are rebuilt from on-disk truth via `/migrate reindex` after
+import; `papers/<slug>` rebuilds via `/summarize` and `project/figure-refs` via
+`/figure ref sync`. AES-256 encryption is opt-in (`--encrypt --passphrase-env VAR`).
 
 ## Sharing with friends
 
