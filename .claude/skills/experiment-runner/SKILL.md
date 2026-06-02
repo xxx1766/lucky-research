@@ -43,6 +43,12 @@ pulls it in:
 | `references/artifacts-workflow.md` | Stage 6.5 full step-by-step: list / register / scan CLI shapes, the `--fetch-cmd` synthesis ladder per `--source` (hf, http, git-lfs, s3, other), the shell-out target (`python -m research_assistant.migrate artifacts ...`), composition with `/migrate export`'s exclude-and-record-fetch-cmd flow. | Stage 6.5 (`/experiment artifacts {list,register,scan}`) |
 | `references/analyze-prompt.md` | Verbatim "实验分析" prompt prelude (adapted from awesome-ai-research-writing). Two-part response format (`Part 1 [LaTeX]` with `\paragraph{Title Case Conclusion}` blocks, no `\textbf`/`\emph`; `Part 2 [Translation]` Chinese). | Stage 7 (`/experiment analyze`) |
 
+**`Refresh _index.md.`** Wherever a stage below says this, call
+`research_assistant.experiments.refresh_experiments_index()` — it rewrites
+`outputs/experiments/_index.md` from every experiment's `manifest.md` (slug
+· status · created · clone · papers) and returns the count. Single source
+of truth for the table.
+
 ## Progress display
 
 Every `/experiment` subcommand ends by printing a **one-line progress footer** so the

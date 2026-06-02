@@ -113,6 +113,7 @@ from .paths import (  # noqa: E402
 from .registration import (  # noqa: E402
     append_figures_to_version,
     infer_fleet_from_versions,
+    refresh_experiments_index,
     register_version,
 )
 from .repo import (  # noqa: E402
@@ -180,6 +181,7 @@ __all__ = [
     "parse_semver",
     "parse_version",
     "references_path",
+    "refresh_experiments_index",
     "register_version",
     "render_progress_board",
     "render_progress_footer",

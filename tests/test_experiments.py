@@ -956,6 +956,141 @@ def test_infer_fleet_from_versions_sorts_by_hostname(tmp_path, monkeypatch):
     assert [m.hostname for m in fleet] == ["alpha-host", "zeta-host"]
 
 
+def test_infer_fleet_from_versions_handles_flat_host_string(tmp_path, monkeypatch):
+    """Hand-written version files use ``host: <hostname>`` flat-string form.
+    `register_version` writes the nested mapping. Heuristic must handle both."""
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    versions_dir = experiment_path("exp") / "versions"
+    versions_dir.mkdir(parents=True, exist_ok=True)
+    (versions_dir / "v1.0.md").write_text(
+        "---\n"
+        'version: "v1.0"\n'
+        'description: "x"\n'
+        "kind: minor\n"
+        "host: gpu-box-flat\n"
+        "gpu:\n"
+        "  - name: A100\n"
+        "    count: 2\n"
+        "    driver: 545.23\n"
+        "cuda: '12.x'\n"
+        "python: '3.12'\n"
+        "---\n\n# body\n"
+    )
+    fleet = infer_fleet_from_versions()
+    assert len(fleet) == 1
+    assert fleet[0].hostname == "gpu-box-flat"
+    # And the GPU got appended even though a non-indented ``cuda:`` line
+    # immediately followed the gpu block (regression: prior code reset
+    # current_gpu without flushing it to ``gpus``).
+    assert [(g.name, g.count) for g in fleet[0].gpus] == [("A100", 2)]
+
+
+def test_infer_fleet_from_versions_appends_trailing_gpu(tmp_path, monkeypatch):
+    """Standalone regression for the current_gpu flush — when the gpu: block
+    ends with a non-indented line (cuda:, python:, ...) the last GPU must
+    still land in the fleet."""
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    versions_dir = experiment_path("exp") / "versions"
+    versions_dir.mkdir(parents=True, exist_ok=True)
+    (versions_dir / "v1.0.md").write_text(
+        "---\n"
+        'version: "v1.0"\n'
+        'description: "x"\n'
+        "kind: minor\n"
+        "host:\n"
+        "  hostname: nested-host\n"
+        "  os: Linux\n"
+        "gpu:\n"
+        "  - name: H100\n"
+        "    count: 1\n"
+        "cuda: '12.4'\n"  # non-indented sibling key — must flush current_gpu
+        "---\n\n# body\n"
+    )
+    fleet = infer_fleet_from_versions()
+    assert len(fleet) == 1
+    assert [g.name for g in fleet[0].gpus] == ["H100"]
+
+
+# ---------- refresh_experiments_index ----------
+
+
+def _write_manifest(slug: str, *, status: str = "active", created: str = "2026-01-01",
+                    papers: list[str] | None = None, clone_status: str = "tracked") -> None:
+    """Build a minimal-but-valid experiment manifest.
+
+    `repo:` is required by the Experiment model; defaults to clone_status=tracked
+    when the caller doesn't care about the clone state."""
+    exp_dir = experiment_path(slug)
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    papers_block = (
+        "papers: []\n" if not papers
+        else "papers:\n" + "".join(f"  - {p}\n" for p in papers)
+    )
+    (exp_dir / "manifest.md").write_text(
+        "---\n"
+        f"slug: {slug}\n"
+        f"title: '{slug} title'\n"
+        f"created_at: '{created}'\n"
+        f"status: {status}\n"
+        "repo:\n"
+        "  url: 'git@github.com:u/r.git'\n"
+        "  branch: main\n"
+        f"  clone_status: {clone_status}\n"
+        f"{papers_block}"
+        "---\n\n# body\n"
+    )
+
+
+def test_refresh_experiments_index_writes_table_from_manifests(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _write_manifest("alpha", status="active", created="2026-03-01",
+                    papers=["v/alpha-paper"], clone_status="cloned")
+    _write_manifest("bravo", status="paused", created="2026-04-15",
+                    papers=[], clone_status="tracked")
+
+    n = experiments.refresh_experiments_index()
+    assert n == 2
+
+    text = (tmp_path / "_index.md").read_text()
+    lines = text.splitlines()
+    assert lines[0] == "# Experiments vault"
+    assert lines[2] == "| Slug | Status | Created | Clone | Papers |"
+    # Sorted by manifest_path sort (alphabetical by slug).
+    assert "| alpha | active | 2026-03-01 | cloned | v/alpha-paper |" in text
+    assert "| bravo | paused | 2026-04-15 | tracked | — |" in text
+
+
+def test_refresh_experiments_index_skips_underscore_dirs(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _write_manifest("real-exp")
+    # Underscore-prefixed dir should be skipped by list_experiments().
+    smoke = tmp_path / "_smoketest"
+    smoke.mkdir()
+    (smoke / "manifest.md").write_text(
+        "---\nslug: _smoketest\ntitle: x\ncreated_at: '2026-01-01'\nstatus: active\n"
+        "repo:\n  url: 'git@github.com:u/r.git'\n  branch: main\n  clone_status: tracked\n"
+        "papers: []\n---\n"
+    )
+
+    n = experiments.refresh_experiments_index()
+    assert n == 1
+    text = (tmp_path / "_index.md").read_text()
+    assert "real-exp" in text
+    assert "_smoketest" not in text
+
+
+def test_refresh_experiments_index_empty_repo_writes_header_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    n = experiments.refresh_experiments_index()
+    assert n == 0
+    text = (tmp_path / "_index.md").read_text()
+    assert "# Experiments vault" in text
+    assert "| Slug |" in text
+    # No body rows after the separator.
+    body = text.split("|---|---|---|---|---|", 1)[1].strip()
+    assert body == ""
+
+
 # ---------- stage_status: feasibility + design refactor ----------
 
 def test_stage_status_tracks_last_feasibility_check(tmp_path, monkeypatch):

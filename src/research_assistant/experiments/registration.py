@@ -246,11 +246,25 @@ def _heuristic_extract_host_and_gpus(text: str) -> tuple[str | None, list[GPUInf
         if line.strip() == "---":
             break
         if not line[:1].isspace():
+            # Leaving the current section. If we accumulated a GPU but the
+            # ``gpu:`` block ended with no trailing ``- name:`` to flush it,
+            # append before resetting — otherwise the last GPU silently drops.
+            if current_gpu:
+                gpus.append(GPUInfo(**current_gpu))
             section = None
             current_gpu = None
             stripped = line.rstrip()
             if stripped.startswith("host:") and stripped.strip() != "host: null":
-                section = "host"
+                # Support TWO shapes:
+                #   1. flat string — ``host: <hostname>``  (hand-written
+                #      version files use this)
+                #   2. nested mapping — ``host:`` then indented
+                #      ``  hostname: <name>``  (register_version writer)
+                inline = stripped[len("host:"):].strip().strip('"').strip("'")
+                if inline:
+                    hostname = inline
+                else:
+                    section = "host"
             elif stripped == "gpu:":
                 section = "gpu"
             continue
@@ -288,6 +302,49 @@ def _heuristic_extract_host_and_gpus(text: str) -> tuple[str | None, list[GPUInf
             stacklevel=2,
         )
     return hostname, gpus
+
+
+def refresh_experiments_index() -> int:
+    """Rewrite ``outputs/experiments/_index.md`` from each experiment's
+    ``manifest.md``. Returns the number of experiments listed.
+
+    The table columns match the empty header on disk:
+    ``| Slug | Status | Created | Clone | Papers |``. Experiments with
+    malformed manifests are skipped (the parser already swallows them).
+
+    The SKILL's "Refresh ``_index.md``" instruction in Stages 1 / 3.5 / 5
+    delegates to this helper so every experiment-mutating verb leaves the
+    index in sync. Previously the instruction had no Python implementation;
+    the file lived as an empty header.
+    """
+    from .parsers import parse_experiment
+
+    if not _exp.EXPERIMENTS_DIR.is_dir():
+        return 0
+    rows: list[tuple[str, str, str, str, str]] = []
+    for manifest in sorted(_exp.list_experiments()):
+        try:
+            exp = parse_experiment(manifest)
+        except Exception:  # noqa: BLE001 — match list_experiments' lax contract
+            continue
+        clone = exp.repo.clone_status if exp.repo else "—"
+        papers = ", ".join(exp.papers) if exp.papers else "—"
+        rows.append((exp.slug, exp.status, exp.created_at.isoformat(), clone, papers))
+
+    lines = [
+        "# Experiments vault",
+        "",
+        "| Slug | Status | Created | Clone | Papers |",
+        "|---|---|---|---|---|",
+    ]
+    for slug, status, created, clone, papers in rows:
+        lines.append(f"| {slug} | {status} | {created} | {clone} | {papers} |")
+    lines.append("")  # trailing newline
+
+    index_path = _exp.EXPERIMENTS_DIR / "_index.md"
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text("\n".join(lines), encoding="utf-8")
+    return len(rows)
 
 
 def infer_fleet_from_versions() -> list[Machine]:

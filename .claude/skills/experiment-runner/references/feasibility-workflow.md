@@ -66,8 +66,12 @@ suggestions.
    - `## Fleet snapshot (used for this assessment)`
    - `## Next step`
 
-6. **Refresh `_index.md`** (add `last_feasibility_check`). Refresh
-   `status.md`.
+6. **Refresh `_index.md`** by calling
+   `research_assistant.experiments.refresh_experiments_index()` (rebuilds
+   the table from every experiment's `manifest.md`; the
+   `last_feasibility_check` column is currently a future-work extension
+   and not yet written by the helper). Refresh `status.md` via
+   `stage_status(slug)` + `render_progress_board(...)`.
 
 7. Print the report summary + footer.
 
