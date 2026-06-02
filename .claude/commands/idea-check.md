@@ -27,8 +27,8 @@ The first token may be a subcommand; anything after it is the argument.
 | `/idea-check status` | Print the 6-stage checkbox for the active idea. |
 | `/idea-check list` | Print the global registry (`outputs/idea-checks/_index.md`). |
 | `/idea-check show <slug>` | Print the manifest + status board for one idea. |
-| `/idea-check horizontal: <free-text>` | Legacy mode — related-work matrix. |
-| `/idea-check vertical: <slug>` | Legacy mode — lineage trace. |
+| `/idea-check horizontal <free-text>` | Legacy mode — related-work matrix. |
+| `/idea-check vertical <slug>` | Legacy mode — lineage trace. |
 
 ## Cursor
 

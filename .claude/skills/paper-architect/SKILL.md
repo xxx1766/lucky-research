@@ -215,7 +215,9 @@ user runs status on a freshly cloned machine before remembering to run
 - Optional: a CFP URL or pasted call-for-papers text.
 
 **Workflow**
-1. Validate slug shape via `research_assistant.papers.slugify_venue`.
+1. Build the canonical slug via `research_assistant.papers.slugify_venue(name, year)`
+   — it strips non-alphanumerics and a trailing year in the name so the result
+   stays single-year (`"ICLR 2026" → "ICLR-2026"`).
 2. Create `outputs/papers/<venue>/` if missing.
 3. AI drafts `_venue.md` from the CFP. Sections: page limit, deadlines, review criteria,
    accepted paper styles, recent trends, scoring rubric.
@@ -223,12 +225,22 @@ user runs status on a freshly cloned machine before remembering to run
 5. Write `outputs/papers/<venue>/_venue.md`.
 6. `mcp__claude-flow__memory_store(namespace="project/paper-context", key="current",
    value={venue: <slug>, direction: null})`.
-7. Tell the user the expected template location:
-   `outputs/papers/<venue>/_template/`. The user drops the conference `.sty`, `.cls`,
-   and (optional) `.bst` files there — the skill does **not** auto-fetch them.
-   If `_template/` is missing or empty when `/paper write` or `/paper render` runs,
-   the render step prints a clear "drop the template files here" message and skips
-   the build (the `.tex` write itself still succeeds).
+7. Bootstrap the template directory. **Check `docs/venues/<CONF>/<YEAR>/`
+   first** — if that path exists, the group has already cataloged this venue,
+   and the shared snapshot includes `_venue.md` + `_template/` + optionally
+   `_venue-refs/`. Tell the user to run:
+
+       cp -r docs/venues/<CONF>/<YEAR>/* outputs/papers/<venue>/
+
+   Then re-read `_venue.md` and refresh deadlines for this cycle. If
+   `docs/venues/<CONF>/<YEAR>/` is missing, fall back to the manual path:
+   tell the user to drop the conference `.sty`, `.cls`, and (optional)
+   `.bst` files into `outputs/papers/<venue>/_template/` — the skill does
+   **not** auto-fetch them. Either way, if `_template/` is missing or empty
+   when `/paper write` or `/paper render` runs, the render step prints a
+   clear "drop the template files here" message and skips the build (the
+   `.tex` write itself still succeeds). See `docs/venues/README.md` for the
+   shared-library conventions.
 8. Print `render_progress_footer(<slug>, None, None)` — venue set, direction pending.
 
 ### Sub-stage 1b — `/paper venue refs` (reference-paper writing conventions)
@@ -346,7 +358,19 @@ created: 2026-05-12
    but write into `<direction>/related-papers/<slug>.md` instead of `outputs/summaries/`.
 3. Index each summary in AgentDB namespace `papers/` (lit-summarize already does this).
 4. Print a short table of all scouted papers.
-5. Print `render_progress_footer(venue, direction, stage_status(direction_dir))`.
+5. **Surface local experiments touching this direction** so the user sees what
+   they've already run alongside the external literature:
+   - Call `research_assistant.papers.find_experiments_for_paper(venue, direction)`
+     — explicit hits from `manifest.papers` containing `<venue>/<direction>` plus
+     the bound primary from `expert.md`.
+   - For semantic discovery, also call
+     `mcp__claude-flow__memory_search(namespace="project/experiments", query=<keywords>)`
+     and `mcp__claude-flow__memory_search(namespace="project/experiments/<slug>/versions", query=<keywords>)`
+     for each hit slug; print top 3 most relevant versions per experiment.
+   - Render a table: `slug | title | status | latest_version | binding_source`.
+     If the list is empty, print one line ("no local experiments bound to this
+     direction yet — `/experiment init` to start one") and move on.
+6. Print `render_progress_footer(venue, direction, stage_status(direction_dir))`.
 
 ## Stage 4 — `/paper focus`
 
@@ -384,6 +408,22 @@ do/don't/beat lists adapted from
 [xxx1766's "how to write a paper"](https://xxx1766.github.io/2026/03/19/how-to-write-paper/),
 plus the cross-cutting principles below. Treat it as a *required* prelude — it
 overrides default drafting habits (IMRAD order, "we propose…" openers, etc.).
+
+**Resolve the venue family** before reading any section block. Call
+`research_assistant.papers.family_for_venue(venue)`; it returns one of
+`systems` / `nlp` / `cv` / `ml` / `db` / `ir` / `default`. The resolver
+checks `_venue.md` for an explicit `Family: <name>` override line first,
+then falls back to a built-in venue-prefix map. When the family is
+`systems`, `nlp`, or `cv`, `section-heuristics.md` carries a matching
+`## family: <name>` block with **additive** `### <kind>` sub-blocks — extra
+Do / Don't / Beats items to layer on top of the default `## section: <kind>`
+block. (`ml`, `db`, `ir` resolve correctly but don't have sub-blocks yet,
+so they degrade to the default heuristics.) Users can pin a niche venue to
+the closest family by adding one line to their `_venue.md`:
+
+```
+Family: systems
+```
 
 Always load `references/latex-conventions.md`. It carries the project-wide
 LaTeX style rules (hard rules, math notation, tables and figures, word choice,
@@ -464,9 +504,31 @@ Cross-cutting principles enforced in this stage:
   1. **Resolve the section's kind** via the synonym map in
      `references/section-heuristics.md` and read the matching
      `## section: <kind>` block. If no match, use `## section: default`.
+     **Also layer the family block** — read the matching
+     `## family: <family>` → `### <kind>` sub-block (when one exists) and
+     treat its Extra Do / Extra Don't / Extra Beats items as additions to
+     the default kind block. The default kind block always applies; the
+     family block stacks on top.
   2. **Read the cross-cutting block** plus `expert.md`, `focused-problem.md`,
      `experiments/*`, `related-papers/`, `outline.md`'s block for this section,
      and any existing `sections/*.tex` for tone + terminology consistency.
+  2.5. **For `results`-kind sections, pull in bound-experiment outputs.** Call
+     `research_assistant.papers.collect_experiment_results_for_paper(venue, direction)`
+     to enumerate every experiment bound to this direction, paired with its
+     latest mirrored `outputs/experiments/<slug>/results/<latest>/`. For each
+     hit:
+     - If `analysis_tex` is set, **read it** and treat it as the experiment's
+       authoritative result paragraphs — designed to be pasted under
+       `\section{Results}` with no rewriting. `/experiment analyze` enforces
+       the no-`\textbf` / no-`\emph` / `\paragraph{Title Case}` shape.
+     - If `analysis_md` is set, read it too — that's the audit log with
+       Chinese translation that lets you spot-check numbers you reuse.
+     - If `results_dir` is set but `analysis_tex` is `None`, the user has
+       run `version add` but not yet `/experiment analyze`. Print a one-line
+       hint (`→ /experiment analyze` for `<slug>`) and continue drafting
+       from the raw mirrored files in `other_files`.
+     - If `latest_version` is `None`, the experiment is bound but no version
+       has been registered. Skip it for prose; surface a hint instead.
   3. **Intro gate.** If kind is `intro`, run the funnel check above; on `abort`,
      stop.
   4. **Title revisit.** If kind is `title`, do not draft a new section file —
@@ -804,6 +866,4 @@ mentor can detect drift).
 
 ## Open TODOs
 
-- [ ] Section-template variants per venue family (NLP / CV / systems).
-- [ ] Coupling between `experiments/results/` and external trackers (deferred).
 - [ ] `/mentor add-past-work` UX.

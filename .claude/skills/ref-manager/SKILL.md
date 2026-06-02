@@ -16,26 +16,21 @@ description: Manage references (BibTeX merge, cite-as-you-write resolution) and 
 
 ### Cite-as-you-write
 
-Two modes — auto-detected from the target.
-
-**Mode A — paper direction (LaTeX-native, preferred for papers)**
-
 Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 
 1. Walk `main.tex` + `sections/*.tex` for `\cite{<slug>}` keys via
    `research_assistant.refs.scan_tex_cite_keys`.
 2. For each slug, look up `papers/<slug>` in AgentDB to get bibinfo.
-3. Append BibTeX entries to `<direction>/refs.bib` via
-   `research_assistant.refs.merge_bibtex` (dedupes by key).
-4. No source edit needed — `\cite{slug}` keys already match `refs.bib` entries.
-
-**Mode B — free-form Markdown drafts (legacy, for `outputs/drafts/`)**
-
-1. Scan a draft for `[@cite:slug]` placeholders.
-2. For each slug, look up `papers/<slug>` in AgentDB to get bibinfo.
-3. Emit BibTeX into `outputs/references/<paper-slug>.bib` via
-   `research_assistant.refs.merge_bibtex` (dedupes by DOI/title).
-4. Replace each placeholder with the BibTeX citation key (e.g. `\cite{smith2024}`).
+3. **If a slug has no AgentDB entry** but the user knows the DOI: call
+   `research_assistant.lit.publisher_bibtex.fetch_bibtex_from_publisher(doi)`
+   to fetch the canonical BibTeX (tries CrossRef → doi.org content
+   negotiation → CloakBrowser stealth fallback). Then `memory_store` it under
+   `papers/<slug>` so the next `/cite` run skips the network entirely.
+4. Append BibTeX entries to `<direction>/refs.bib` via
+   `research_assistant.refs.merge_bibtex` (dedupes by DOI → title+author →
+   entry key).
+5. No source edit needed — `\cite{slug}` keys already match `refs.bib`
+   entries.
 
 ### Format conversion
 
@@ -44,14 +39,13 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 
 ## Outputs
 
-- `outputs/papers/<venue>/<direction>/refs.bib` — Mode A (paper direction).
-- `outputs/references/<paper-slug>.bib` — Mode B (free-form Markdown drafts).
+- `outputs/papers/<venue>/<direction>/refs.bib` — per-direction BibTeX.
 - Converted document next to the source (`*.tex`, `*.docx`).
 
 ## Memory keys touched
 
-- `papers/<slug>` — read (bibinfo lookup)
-- `drafts/<paper-slug>` — read (citation resolution)
+- `papers/<slug>` — read (bibinfo lookup); written when step 3 fetches a new
+  entry via `publisher_bibtex`.
 
 ## Open enhancements
 

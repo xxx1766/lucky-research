@@ -17,8 +17,13 @@ from research_assistant.papers import (
 
 def test_slugify_venue_shape():
     assert slugify_venue("NeurIPS", 2026) == "NeurIPS-2026"
-    assert slugify_venue("ICLR 2026", 2026) == "ICLR2026-2026"
+    # Trailing year in the name is stripped before slugifying — no double-year.
+    assert slugify_venue("ICLR 2026", 2026) == "ICLR-2026"
+    assert slugify_venue("ICLR-2026", 2026) == "ICLR-2026"
+    assert slugify_venue("NeurIPS 2025", 2026) == "NeurIPS-2026"  # year override
     assert slugify_venue("CoLM", 2025) == "CoLM-2025"
+    # Only YYYY at end is stripped, not embedded numerics.
+    assert slugify_venue("EMNLP1", 2026) == "EMNLP1-2026"
 
 
 def test_slugify_direction_shape():

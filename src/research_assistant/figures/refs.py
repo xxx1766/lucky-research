@@ -63,8 +63,13 @@ def list_refs() -> list[str]:
 
 
 def to_agentdb_payload(ref: FigureRef) -> dict:
-    """Format a FigureRef for `mcp__claude-flow__memory_store`."""
-    text = " | ".join([
+    """Format a FigureRef for ``mcp__claude-flow__memory_store(**payload)``.
+
+    The ``value`` field is the embeddable string that vector search runs over —
+    matches the contract used by every other ``*_to_agentdb_payload`` helper
+    in the codebase (experiments, migrate, mentor, ideas).
+    """
+    value = " | ".join([
         f"source: {ref.source}",
         f"kind: {ref.kind}",
         f"tags: {', '.join(ref.tags)}" if ref.tags else "tags: (none)",
@@ -73,7 +78,7 @@ def to_agentdb_payload(ref: FigureRef) -> dict:
     return {
         "namespace": "project/figure-refs",
         "key": ref.slug,
-        "text": text,
+        "value": value,
         "metadata": {
             "source": ref.source,
             "kind": ref.kind,

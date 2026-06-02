@@ -1,7 +1,8 @@
 """Discovery helpers for venue-aware + arXiv-fallback paper sourcing.
 
-Real implementations land later; signatures are locked here so the
-paper-architect skill can call them as soon as bodies exist.
+Exposes :func:`search_arxiv` (arXiv API), :func:`search_openreview`
+(NeurIPS / ICLR / COLM / TMLR / etc.), and :func:`search_for_direction`
+which dispatches by venue family.
 """
 from __future__ import annotations
 

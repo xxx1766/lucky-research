@@ -14,6 +14,7 @@ from pathlib import Path
 from research_assistant.common.io import PAPERS_DIR
 
 _VENUE_CLEAN = re.compile(r"[^A-Za-z0-9]+")
+_VENUE_TRAILING_YEAR = re.compile(r"[\s\-_/]*(?:19|20)\d{2}\s*$")
 _DIRECTION_CLEAN = re.compile(r"[^a-z0-9]+")
 _BIB_ENTRY = re.compile(r"^\s*@\w+\s*\{", re.MULTILINE)
 
@@ -30,8 +31,14 @@ _STAGES: tuple[str, ...] = (
 
 
 def slugify_venue(name: str, year: int) -> str:
-    """Build a `<Conf>-<YYYY>` slug. Strips non-alphanumerics from conf name."""
-    cleaned = _VENUE_CLEAN.sub("", name)
+    """Build a `<Conf>-<YYYY>` slug. Strips non-alphanumerics from conf name.
+
+    A trailing year in ``name`` (e.g. ``"ICLR 2026"``) is removed before
+    slugifying so the result stays single-year (``"ICLR-2026"`` rather than
+    ``"ICLR2026-2026"``).
+    """
+    stripped = _VENUE_TRAILING_YEAR.sub("", name)
+    cleaned = _VENUE_CLEAN.sub("", stripped)
     if not cleaned:
         raise ValueError(f"empty venue slug for name={name!r}")
     return f"{cleaned}-{year}"
@@ -303,6 +310,13 @@ from research_assistant.papers.binding import (  # noqa: E402
     sync,
     unbind,
 )
+from research_assistant.papers.related_experiments import (  # noqa: E402
+    collect_experiment_results_for_paper,
+    find_experiments_for_paper,
+)
+from research_assistant.papers.venue_family import (  # noqa: E402
+    family_for_venue,
+)
 from research_assistant.papers.venue_conventions import (  # noqa: E402
     VenueRefAnalysis,
 )
@@ -334,7 +348,10 @@ __all__ = [
     "VenueRefsSummary",
     "archive_direction",
     "bind",
+    "collect_experiment_results_for_paper",
     "distill_venue_conventions",
+    "family_for_venue",
+    "find_experiments_for_paper",
     "ingest_venue_ref",
     "is_bound",
     "list_archived",

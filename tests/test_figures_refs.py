@@ -71,11 +71,14 @@ def test_to_agentdb_payload_includes_search_text():
     payload = fr.to_agentdb_payload(ref)
     assert payload["namespace"] == "project/figure-refs"
     assert payload["key"] == "vaswani-arch"
-    text = payload["text"]
-    assert "Vaswani" in text
-    assert "structural" in text
-    assert "architecture" in text
-    assert "Symmetric layout" in text
+    # `value` is the canonical key — matches every other *_to_agentdb_payload
+    # in the codebase and the kwargs `memory_store` expects.
+    assert "text" not in payload
+    value = payload["value"]
+    assert "Vaswani" in value
+    assert "structural" in value
+    assert "architecture" in value
+    assert "Symmetric layout" in value
 
 
 def test_read_ref_round_trip(fake_refs_dir: Path, sample_image: Path):

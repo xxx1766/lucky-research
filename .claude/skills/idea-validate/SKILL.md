@@ -225,7 +225,7 @@ committing to evaluate.
    <last-3-years-inclusive>. Override?` Accept plain-text edits.
 2. Primary source — arXiv: call
    `research_assistant.ideas.scout.scout_recent_papers(query, year_range,
-   max_results=25)`. This wraps `lit.sourcing.search_arxiv` (real impl) and
+   max_results=25)`. This wraps `lit.sourcing.search_arxiv` and
    returns `ScoutResult`.
 3. Fallback — non-arXiv venues (OSDI, SOSP, NSDI, USENIX ATC, USENIX Security,
    CHI, SIGMOD, VLDB, etc.): if the idea's area tags include any of
@@ -493,7 +493,6 @@ venues first.
 ## File paths Claude should know
 
 * `research_assistant.ideas.slug.slugify`
-* `research_assistant.ideas.socratic.{SocraticTrace, record_turn, render_socratic_md}`
 * `research_assistant.ideas.contrarian.{ContrarianTrace, record_turn, render_contrarian_md, render_scout_appendix, to_agentdb_payload}`
 * `research_assistant.ideas.brainstorm.{BrainstormTrace, BrainstormCandidate, BrainstormHandoff, FRAMEWORK_NAMES, record_turn, add_candidate, converge, survivors, render_brainstorm_md, to_agentdb_payload}`
 * `research_assistant.ideas.scout.{scout_recent_papers, ScoutGaps, render_scout_md, to_agentdb_payload}`

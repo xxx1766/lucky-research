@@ -21,12 +21,20 @@ dependencies = [
     "colorthief>=0.2.1",   # Palette auto-extract from reference images
     "matplotlib>=3.8",     # Data figures (figure-tool data kind)
     "pyyaml>=6.0",         # YAML frontmatter parse/serialize
+    "pyzipper>=0.3",       # AES-encrypted zip for /migrate export --encrypt
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "ruff>=0.5",
+]
+# Optional anti-bot Chromium for fetching BibTeX from publisher pages that
+# block plain urllib (Cloudflare / FingerprintJS / reCAPTCHA-protected).
+# Used by `research_assistant.lit.publisher_bibtex.fetch_bibtex_via_browser`
+# as the tier-3 fallback after CrossRef + doi.org content negotiation.
+crawl = [
+    "cloakbrowser>=0.1",
 ]
 
 [tool.setuptools.packages.find]

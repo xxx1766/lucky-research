@@ -43,7 +43,7 @@ without ruflo.
 
 ### Step 1 — Resolve scope
 
-1. Read the cursor: `mcp__claude-flow__memory_retrieve(namespace="project/paper-context", key="current")`.
+1. Read the cursor: `mcp__claude-flow__memory_retrieve(namespace="project", key="paper-context.current")` (same shape `/paper venue` and `/paper direction` write).
 2. If a `(venue, direction)` cursor exists, use it. Otherwise ask the user for a venue +
    direction (or a free-form topic) in plain text, and set the cursor via
    `/paper venue` / `/paper direction` first if they want persistence.
@@ -90,5 +90,5 @@ When all agents return:
 
 ## Memory keys touched
 
-- `project/paper-context` — read (cursor).
+- `project` — read cursor (key `paper-context.current`).
 - `papers/<slug>` — write (one per scouted paper, same key `/paper scout` uses).

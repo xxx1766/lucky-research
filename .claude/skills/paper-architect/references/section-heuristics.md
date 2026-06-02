@@ -102,3 +102,170 @@ apply to every section.
 - **Do:** read `outline.md`'s block for this section name (purpose, paragraph beats, anchors, sources, voice notes) and follow it verbatim.
 - **Don't:** invent claims the outline doesn't carry.
 - **Beats:** outline beats, in order.
+
+---
+
+# Per-family overrides
+
+`paper-architect` resolves a *venue family* for the current direction via
+`research_assistant.papers.family_for_venue(venue)` (built-in prefix map +
+optional `Family: <name>` override in `_venue.md`). When the family resolves
+to one of `systems` / `nlp` / `cv`, `/paper write` prepends the matching
+`### <kind>` sub-block here on top of the default `## section: <kind>`
+block above. Each sub-block is **additive** — extra Do / Don't / Beats
+items, not replacements.
+
+`ml`, `db`, `ir` families resolve correctly but don't have sub-blocks yet —
+they degrade to the default heuristics.
+
+---
+
+## family: systems
+
+OSDI / SOSP / NSDI / EuroSys / ATC / ASPLOS / MICRO / ISCA / HPCA / FAST /
+MLSys / SIGCOMM / SoCC voice: **mechanism + measured numbers + workload
+implications**, not formulation-led.
+
+### intro
+
+- **Extra do:** open with a real workload (named system, named trace) and the
+  tax it pays *as a number*; cite a production data point if you have one;
+  close the funnel with a single mechanism word (`scheduling`, `caching`,
+  `placement`, …) so the reader knows which lever you'll pull.
+- **Extra don't:** open with formal notation; open with "with the rise of …".
+
+### method
+
+- **Extra do:** lead with the *mechanism*, not the formulation; describe one
+  quantified design choice (page size, queue depth, batch threshold) and why;
+  call out concurrency / failure-handling primitives explicitly; cite the
+  implementation effort (LOC, lines changed in an existing kernel) when it
+  matters for trust.
+- **Extra don't:** defer engineering decisions to an appendix when reviewers
+  need them inline; introduce a new theoretical bound — that belongs in
+  related-work or discussion.
+
+### results
+
+- **Extra do:** evaluate on a *real* workload, not just a microbenchmark;
+  report **tail latency (p50/p95/p99)** alongside throughput; describe the
+  deployment shape (cluster size, node count, NIC, GPU model) once at the
+  top of the section so each figure caption can be terse; include a
+  cost / energy / utilization angle when the headline is "we save X".
+- **Extra don't:** rely on a single synthetic microbenchmark; report only
+  means — reviewers ask for tails.
+
+### related-work
+
+- **Extra do:** cluster by **mechanism category** (caching / replication /
+  scheduling / consensus / …); for each cluster, end with "but none of them
+  addresses [the focused problem from §1]"; cite production systems
+  (Borg, Spanner, Ceph, …) when the comparison helps trust.
+- **Extra don't:** organize by year; treat ML-systems work and pure-OS work
+  as the same cluster.
+
+### discussion
+
+- **Extra do:** name the workload classes where the mechanism *doesn't* help;
+  state the deployment assumption that would have to break for it to fail
+  (e.g. "if the trace's working set spans more than 4× cache size, …").
+
+---
+
+## family: nlp
+
+ACL / EMNLP / NAACL / TACL / COLING / EACL voice: **task framing +
+multi-dataset evaluation + significance testing**, with an honest
+Limitations + Ethics block as a hard requirement at most modern venues.
+
+### intro
+
+- **Extra do:** name the **task** and the **target users** in the first
+  paragraph; cite the canonical benchmark(s) you'll use and the SOTA number
+  on each; if your contribution is a method, position it against the
+  competing paradigm (e.g. retrieval-augmented vs. fine-tuning).
+- **Extra don't:** present a model as a contribution without naming the
+  downstream task it serves; conflate "evaluation on dataset X" with "claim
+  about language."
+
+### method
+
+- **Extra do:** present the **task formulation first** (input space, output
+  space, training objective), then the architecture or prompt; give the
+  formal objective `\mathcal{L}` once and reuse the symbol; describe the
+  inference-time pipeline distinctly from training when they differ.
+- **Extra don't:** describe an LLM by its parameter count alone — the family,
+  the tokenizer, and the instruction-tuning status all change the comparison.
+
+### results
+
+- **Extra do:** evaluate on **≥2 datasets** when the task supports it;
+  report **significance** (paired bootstrap or McNemar's, ≥3 seeds for
+  training-from-scratch); when reporting LLM outputs, declare the model
+  family, version date, decoding params, and prompt template once.
+- **Extra don't:** report a single number without a CI or std; conflate
+  zero-shot, few-shot, and fine-tuned numbers in one column.
+
+### related-work
+
+- **Extra do:** distinguish *task* prior-work from *method* prior-work as
+  separate sub-paragraphs; cite the dataset paper alongside the first
+  evaluation result; mention the modeling family you build on (encoder /
+  decoder / encoder-decoder / retrieval-augmented).
+
+### discussion
+
+- **Extra do:** include an explicit **Limitations** sub-section (most
+  *ACL/EMNLP venues require it post-2023); include an **Ethical
+  considerations** sub-section when the work touches user data, generation
+  at scale, or downstream-harm risks; declare the languages evaluated and
+  the population they sample from.
+
+---
+
+## family: cv
+
+CVPR / ICCV / ECCV / BMVC / WACV / 3DV voice: **architecture diagram +
+qualitative + quantitative**, with visual examples surfacing early and a
+teaser figure typically on page 1.
+
+### intro
+
+- **Extra do:** include a **teaser figure** on page 1 (referenced from
+  intro); state the visual phenomenon you're tackling in one sentence
+  before any architecture talk; cite the standard dataset(s) and the SOTA
+  number on each up front.
+- **Extra don't:** start with formulation when a single example image
+  conveys the problem in one glance.
+
+### method
+
+- **Extra do:** open with the **architecture diagram** (referenced by
+  number) and walk the data flow left-to-right; declare image / video /
+  point-cloud / 3D input modality explicitly; state the inference compute
+  budget (params, FLOPs, ms / image) early so reviewers know the comparison
+  bracket.
+- **Extra don't:** describe a backbone change as a contribution without an
+  ablation isolating its effect.
+
+### results
+
+- **Extra do:** report on **the standard benchmark(s)** for your task
+  (ImageNet / COCO / KITTI / nuScenes / …); show **qualitative failure
+  examples** alongside the quantitative table; report FPS / latency on a
+  named GPU when the contribution is efficiency.
+- **Extra don't:** crop figures so the failure cases are invisible; report
+  only one resolution when the method depends on input scale.
+
+### related-work
+
+- **Extra do:** organize by **task** first (detection / segmentation /
+  generation / depth / …), then by paradigm (CNN / transformer / diffusion
+  / NeRF); cite the recent SOTA you compare against by name and date.
+
+### discussion
+
+- **Extra do:** discuss what fails when the input distribution shifts
+  (day→night, indoor→outdoor, synthetic→real); call out cases where the
+  ground truth itself is ambiguous; note compute-budget assumptions that
+  would break the comparison.
