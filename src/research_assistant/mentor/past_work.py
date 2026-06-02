@@ -20,7 +20,6 @@ kebab-case English, non-alphanumerics collapsed to hyphens.
 """
 from __future__ import annotations
 
-import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -38,8 +37,7 @@ from research_assistant.common.git import (
     guard_under,
 )
 from research_assistant.common.io import PAST_WORK_DIR
-
-_SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
+from research_assistant.common.slug import slugify as _slugify
 
 
 # ---------- models ----------
@@ -75,10 +73,7 @@ class PastWorkEntry(BaseModel):
 
 def slugify(title: str) -> str:
     """Build a kebab-case slug from a free-form title."""
-    cleaned = _SLUG_CLEAN.sub("-", title.lower()).strip("-")
-    if not cleaned:
-        raise ValueError(f"empty past-work slug for title={title!r}")
-    return cleaned
+    return _slugify(title, kind="past-work slug")
 
 
 def next_available_slug(base: str) -> str:

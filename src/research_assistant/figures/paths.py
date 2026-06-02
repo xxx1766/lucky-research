@@ -6,13 +6,11 @@ and calling :func:`resolve_scope` with the read values.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Literal
 
 from research_assistant.common.io import EXPERIMENTS_DIR, PAPERS_DIR
-
-_SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
+from research_assistant.common.slug import slugify as _slugify
 
 
 class NoScopeError(RuntimeError):
@@ -24,10 +22,7 @@ class AmbiguousScopeError(RuntimeError):
 
 
 def slugify(title: str) -> str:
-    cleaned = _SLUG_CLEAN.sub("-", title.lower()).strip("-")
-    if not cleaned:
-        raise ValueError(f"empty figure slug for title={title!r}")
-    return cleaned
+    return _slugify(title, kind="figure slug")
 
 
 def paper_figures_dir(venue: str, direction: str) -> Path:

@@ -35,8 +35,8 @@ from pydantic import BaseModel, Field
 
 from research_assistant.common.frontmatter import parse as parse_fm
 from research_assistant.common.io import DOCS_DIR, RESEARCH_NOTES_DIR
+from research_assistant.common.slug import slugify as _slugify
 
-_SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
 _TEMPLATES = DOCS_DIR
 
 LogKind = Literal[
@@ -117,10 +117,7 @@ class ResearchNotesState(BaseModel):
 
 
 def slugify(title: str) -> str:
-    cleaned = _SLUG_CLEAN.sub("-", title.lower()).strip("-")
-    if not cleaned:
-        raise ValueError(f"empty research-notes slug for title={title!r}")
-    return cleaned
+    return _slugify(title, kind="research-notes slug")
 
 
 def project_dir(slug: str) -> Path:

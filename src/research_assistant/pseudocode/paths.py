@@ -5,11 +5,11 @@ Delegates scope decision to `figures.paths.resolve_scope` so /pseudocode and
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Literal
 
 from research_assistant.common.io import EXPERIMENTS_DIR, PAPERS_DIR
+from research_assistant.common.slug import slugify as _slugify
 from research_assistant.figures.paths import (
     AmbiguousScopeError,
     NoScopeError,
@@ -27,14 +27,9 @@ __all__ = [
     "slugify",
 ]
 
-_SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
-
 
 def slugify(title: str) -> str:
-    cleaned = _SLUG_CLEAN.sub("-", title.lower()).strip("-")
-    if not cleaned:
-        raise ValueError(f"empty algorithm slug for title={title!r}")
-    return cleaned
+    return _slugify(title, kind="algorithm slug")
 
 
 def paper_algorithms_dir(venue: str, direction: str) -> Path:
