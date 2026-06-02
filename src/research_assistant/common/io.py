@@ -26,6 +26,7 @@ FIGURES_DIR = OUTPUTS_DIR / "figures"
 PAPERS_DIR = OUTPUTS_DIR / "papers"
 EXPERIMENTS_DIR = OUTPUTS_DIR / "experiments"
 IDEA_CHECKS_DIR = OUTPUTS_DIR / "idea-checks"
+RESEARCH_NOTES_DIR = OUTPUTS_DIR / "research-notes"
 
 
 def ensure_dirs() -> None:
@@ -46,5 +47,6 @@ def ensure_dirs() -> None:
         PAPERS_DIR,
         EXPERIMENTS_DIR,
         IDEA_CHECKS_DIR,
+        RESEARCH_NOTES_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)

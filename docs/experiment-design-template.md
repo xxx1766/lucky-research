@@ -24,6 +24,22 @@ rewritten to fit a feasibility suggestion.
 
 <what do you expect to find, and why?>
 
+<!--
+Optional: when the design naturally decomposes into a tree of sub-hypotheses,
+list them here using the H1 / H1.1 / H1.2 pattern (adapted from
+Orchestra-Research/AI-Research-SKILLs MIT `0-autoresearch-skill`):
+
+- H1: <root claim>
+  - H1.1: <follow-up that only matters if H1 is supported>
+  - H1.2: <alternative sub-claim>
+- H2: <independent claim>
+
+Each sub-hypothesis carries an independent prediction. Test the root first;
+spawn sub-hypotheses only when results justify the deeper question. Keep
+the tree shallow — if you find yourself at H1.1.2, you probably want a new
+root.
+-->
+
 ## Baselines
 
 - <baseline-1 — paper / model / heuristic>

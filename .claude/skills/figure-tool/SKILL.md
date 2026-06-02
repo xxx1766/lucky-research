@@ -154,6 +154,16 @@ For **kind=structural**:
 7. Print the LaTeX include snippet (see "Insert snippet" below).
 
 For **kind=data**:
+0. **Trajectory shortcut.** If the intent contains "trajectory", "training
+   curve", "metric over runs", or similar, and either (a) the user said
+   "send to chat / paste into HTML" or (b) `matplotlib` is unavailable,
+   reach for `references/trajectory-svg-recipe.md` *instead of* matplotlib.
+   That recipe is a zero-dependency pure-Python SVG (~80 lines, adapted
+   from Orchestra-Research/AI-Research-SKILLs MIT
+   `0-autoresearch-skill`). Write `plot_<slug>.svg.py` (driver) +
+   `<slug>.svg` next to it; skip the `cairosvg` / mplstyle path; set
+   `backend: trajectory-svg` in the note. For all other "metric over
+   time" plots, fall through to the matplotlib path below.
 1. Write `plot_<slug>.py` to the scripts dir for this scope:
    - paper: `outputs/papers/<v>/<d>/figures/_scripts/plot_<slug>.py`
    - experiment: `outputs/experiments/<exp>/repo/scripts/plot_<slug>.py`

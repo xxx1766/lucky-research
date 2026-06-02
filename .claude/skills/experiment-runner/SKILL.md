@@ -151,7 +151,16 @@ inputs/fleet.md                        ← user-maintained fleet manifest (templ
    YAML frontmatter (`design_version`, `created_at`, `derived_from`,
    `feasibility_source: null`, `adopted_suggestions: []`); write to
    `design_version_path(slug, version)`.
-4. Print `render_progress_footer(slug, stage_status(slug))`.
+4. **Optional hypothesis tree.** If the user's hypothesis decomposes into
+   sub-hypotheses, encourage them to use the `H1 / H1.1 / H1.2` pattern
+   inside the `## Hypothesis` section (the template's HTML comment shows
+   the shape). Adapted from Orchestra-Research/AI-Research-SKILLs (MIT)
+   `0-autoresearch-skill`. Keep the tree shallow; H1.1.2-deep usually
+   means "this should be a new root hypothesis". The pattern is purely
+   notational — no helper enforces it, and `/experiment feasibility`
+   treats `## Hypothesis` as a single preserved block regardless of
+   internal structure.
+5. Print `render_progress_footer(slug, stage_status(slug))`.
 
 ## Stage 3.5 — `/experiment feasibility`
 
@@ -404,6 +413,26 @@ indexing is deferred (see Open TODOs).
 - `project/experiments/<slug>` — write (on `init`, `design`, `version add`,
   `feasibility apply`).
 - `papers/<paper-slug>` — read (during `scout`, via `memory_retrieve`).
+
+## Optional commit-style convention
+
+When the user commits *inside the bound GitHub repo* (not this plugin's repo),
+they can adopt the `research(...)` semantic prefix from
+Orchestra-Research/AI-Research-SKILLs (MIT) `0-autoresearch-skill`. The point
+is a lightweight pre-registration: the **protocol commit must precede the
+results commit**, so git history proves the plan existed before the data.
+
+| When | Suggested message |
+|---|---|
+| Design / protocol locked for a new version | `research(protocol): <hypothesis-id> — <one-line>` |
+| Results in for a version | `research(results): <hypothesis-id> — <outcome>` |
+| Outer-loop reflection / direction change | `research(reflect): <direction> — <reason>` |
+| Paper draft cut | `research(paper): <title>` |
+
+This is **purely a suggestion**. lucky-research does not enforce it, parse it,
+or fail a stage when commits use other conventions (`feat(...)` / `fix(...)` /
+free-form are all fine). Skip it entirely if the user's lab uses a different
+git workflow. The plugin's own commits stay on conventional commits.
 
 ## Open TODOs
 

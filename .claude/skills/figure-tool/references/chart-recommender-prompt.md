@@ -97,6 +97,20 @@
 [数据 + 核心结论由 /figure recommend 在调用时填入]
 ```
 
+## Trajectory shortcut
+
+The 19-chart library covers most cases. The one common shape it doesn't quite
+hit is the **optimization trajectory** (metric improvement over experiment
+runs, with the baseline marked as a reference line) — Karpathy-style. When
+the user's data fits that shape (an ordered list of `(run_id, metric_value)`
+points and a baseline) and they want a zero-dependency SVG (e.g. for inline
+HTML embed, Slack drop, no matplotlib in the environment), point them at
+`references/trajectory-svg-recipe.md` *instead of* the matplotlib path.
+
+This is orthogonal to the 19-chart library — when seeds + variance matter,
+fall back to `带置信区域的折线图 (#6)` with matplotlib. The trajectory recipe
+is for the lean single-line case.
+
 ## Hand-off to `/figure new`
 
 After the recommendation prints, surface (plain text — not an AskUserQuestion):

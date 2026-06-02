@@ -1,0 +1,52 @@
+# Research Notes — project-level state
+# Adapted from Orchestra-Research/AI-Research-SKILLs `0-autoresearch-skill`
+# (templates/research-state.yaml). MIT-licensed; minor shape changes to fit
+# lucky-research's slug + AgentDB cursor conventions.
+#
+# Lives at outputs/research-notes/<slug>/state.yaml. Read by /mentor project
+# show; mutated by /mentor project log + /mentor project finding (frontmatter
+# only — body sections live in findings.md and log.md).
+
+project:
+  slug: ""                          # kebab-case; matches the directory name
+  title: ""
+  question: ""                      # one-sentence research question
+  status: active                    # active | paused | concluded
+  started: ""                       # ISO date
+  domain: ""                        # e.g. "interpretability", "long-context inference"
+
+literature:
+  key_papers: []
+  # - slug: "liu2025superposition"
+  #   title: "Superposition Yields Robust Neural Scaling"
+  #   year: 2025
+  #   relevance: "evidence ETF structure in LM heads"
+  open_problems: []                 # gaps identified during scout
+  evidence_gaps: []
+
+hypotheses:
+  # Tree of hypotheses. parent: null for root, otherwise the parent id.
+  # status: pending | active | supported | refuted | inconclusive
+  # - id: H1
+  #   statement: ""
+  #   parent: null
+  #   status: pending
+  #   priority: medium              # high | medium | low
+  #   motivation: ""
+
+experiments:
+  proxy_metric: ""                  # what we optimize / measure
+  baseline_value: null
+  best_value: null
+  total_runs: 0
+  bound_slugs: []                   # outputs/experiments/<slug> entries linked to this project
+
+outer_loop:
+  cycle: 0                          # how many synthesis reflections so far
+  last_direction: null              # deepen | broaden | pivot | conclude
+  last_reflection: ""               # one-line summary of the last reflection
+
+workspace:
+  findings: "findings.md"
+  log: "log.md"
+  paper_direction: null             # "<venue>/<direction>" when bound
