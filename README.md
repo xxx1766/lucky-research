@@ -83,6 +83,45 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 > `/paper status` for the full multi-line board (also persisted to
 > `<direction>/status.md`).
 
+## How the commands chain together
+
+```
+inputs/papers/*.pdf  ──┐
+arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<slug>.md  + AgentDB papers/
+                                                       │
+                                                       ▼
+                                          /idea-check  (socratic → brainstorm → scout →
+                                                        contrarian → evaluate → venues →
+                                                        knowledge → handoff)
+                                                       │
+                                                       ▼
+                                          /paper       (venue → direction → bind →
+                                                        scout → focus → motivate →
+                                                        write → render → humanize →
+                                                        review → status → archive)
+                                                       │
+                                                       │     ╔════════════════════╗
+                                                       ├────▶║ /experiment        ║
+                                                       │     ║ init → design →    ║
+                                                       │     ║ feasibility →      ║
+                                                       │     ║ version add →      ║
+                                                       │     ║ analyze            ║
+                                                       │     ╚════════════════════╝
+                                                       │              │
+                                                       │              ▼
+                                                       │     /figure new, /pseudocode new
+                                                       │              │
+                                                       ▼              ▼
+                                          /cite + /convert   (used by /paper write+render)
+                                                       │
+                                                       ▼
+                                          /mentor      (weekly checkin · research-notes ·
+                                                        past-work · /boss prep)
+                                                       │
+                                                       ▼
+                                          /migrate     (cross-machine transfer)
+```
+
 ## Updating an in-flight project
 
 The progress visualizer and any other plugin update activate purely through
