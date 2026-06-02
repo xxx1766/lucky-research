@@ -7,43 +7,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **lucky-research** is a personal **research-assistant Claude Code plugin**, shared with a
 small group of friends via a single GitHub repo (`git@github.com:xxx1766/lucky-research.git`).
 
-Five MVP capabilities, each exposed as a Skill + slash command:
+13 slash commands, each exposed as a Skill + slash command (full reference: see `HELP.md`):
 
-| Slash | Skill | Capability |
+| Slash | Skill / agent | Capability |
 |---|---|---|
-| `/summarize`  | `lit-summarize`    | 文献总结 — PDFs/arXiv → structured markdown summaries, indexed in AgentDB `papers/`. |
-| `/idea-check` | `idea-validate`    | idea 确认 — horizontal comparison matrix OR vertical lineage trace. |
-| `/paper`      | `paper-architect`  | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → scout → focus → motivate → write`) under `outputs/papers/<venue>/<direction>/`. |
-| `/cite`, `/convert` | `ref-manager`      | 参考文献 + 格式 — BibTeX merge, cite-as-you-write resolution, Markdown/LaTeX/docx via pandoc. |
-| `/mentor`     | `research-mentor` + `boss-historian` (agent) | 科研导师 + 老板汇报 — long-running trajectory tracking, weekly check-ins, path corrections, plus boss profile / meeting log / rehearsal under `/mentor boss …`. |
-| `/past-work`  | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; powers recall during `/paper direction` discussions. |
-| `/boss`       | _alias_ for `/mentor boss …` | Shortcut for muscle memory; identical behavior. |
-| `/experiment` | `experiment-runner` | 实验设计 + 实验执行/分析 — bind to one GitHub repo per experiment (URL + SHA tracking, optional clone), record versioned execution attempts (semver) with full env capture, mirror result files locally so `/paper` can pull them at write time. Plus `/experiment artifacts list\|register\|scan` for managing per-experiment `external-artifacts.md`. |
-| `/figure`     | `figure-tool`       | 科研绘图 — structural SVG + matplotlib data plots + reference-figure library; scoped to current /paper or /experiment cursor. |
-| `/migrate`    | `migrate-tool`      | 跨机器迁移 — bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude` config) into one zip and restore on a new machine without overwriting existing files. Excludes registered external artifacts (HF base models, …) and records their fetch commands in the archive manifest. |
+| `/summarize`   | `lit-summarize`             | 文献总结 — PDFs/arXiv/DOIs → structured markdown summaries, indexed in AgentDB `papers/`. Pulls canonical BibTeX via `lit/publisher_bibtex.py` (CrossRef → doi.org → CloakBrowser) when a DOI is known. |
+| `/idea-check`  | `idea-validate`             | idea 确认 — 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) with two micro-flows (`brainstorm` 1.5, `contrarian` 2.5); plus legacy horizontal / vertical modes. |
+| `/scout-swarm` | `research-swarm` (optional) | 并行 scout — parallelize `/paper scout` with a ruflo researcher swarm; degrades to "use `/paper scout`" when ruflo tools are absent. |
+| `/paper`       | `paper-architect`           | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
+| `/cite`, `/convert` | `ref-manager`          | 参考文献 + 格式 — `\cite{}` scan + BibTeX merge into `<direction>/refs.bib`; pandoc-driven Markdown ↔ LaTeX ↔ docx conversion. |
+| `/mentor`      | `research-mentor` + `boss-historian` | 科研导师 + 老板汇报 — weekly check-in vs goals · stale-experiment surfacing · research-notes triplet (state / log / findings) · `/mentor boss …` delegation. |
+| `/past-work`   | `past-work-historian` (agent) | 往期工作 — capture / list / sync past projects under `inputs/past-work/`; bind/clone repo for `/paper direction` recall. |
+| `/boss`        | `boss-historian` (agent)    | Alias for `/mentor boss …` — group-PI profile + per-meeting notes + pre-report rehearsals under `inputs/boss-profile/`. |
+| `/experiment`  | `experiment-runner`         | 实验设计 + 执行/分析 — bind to one GitHub repo per experiment (URL + branch + SHA), record semver versions (env · pip freeze · commit · result mirror), register external artifacts, run advisory feasibility, analyze results. |
+| `/figure`      | `figure-tool`               | 科研绘图 — structural SVG (architecture / pipeline / concept) or matplotlib data plots + reference-figure library; scoped to current `/paper` or `/experiment` cursor. |
+| `/pseudocode`  | `pseudocode-tool`           | LaTeX 算法伪代码 — `algorithm + algpseudocode` (default) or `algorithm2e`; venue-driven package pick + notation linting; scoped like `/figure`. |
+| `/migrate`     | `migrate-tool`              | 跨机器迁移 — bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude` config) into a zip; AES-encrypt optional; never overwrites on import. `reindex` rebuilds AgentDB from on-disk truth. |
 
 ## Repository Layout
 
 ```
 src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, mentor diff)
-  lit/                    PDF + arXiv ingestion (+ sourcing.py for venue-aware scout)
-  ideas/                  Idea matrix + lineage helpers
-  refs/                   BibTeX merge + pandoc convert
-  mentor/                 Trajectory diff + check-in template + past-work + boss-profile
-  papers/                 Venue/direction path resolution + stage-status helpers
+  lit/                    PDF + arXiv + DOI ingestion (+ publisher_bibtex.py 3-tier fetch;
+                          sourcing.py for venue-aware scout)
+  ideas/                  6-stage Socratic helpers (registry, socratic, brainstorm, scout,
+                          contrarian, evaluate, venues, knowledge, status, slug)
+  refs/                   BibTeX merge + pandoc convert + LaTeX render (tectonic ladder)
+  mentor/                 Trajectory diff + check-in template + research-notes triplet
+                          + past-work + boss-profile
+  papers/                 Venue/direction path resolution + stage-status + binding + sync
+                          + venue_refs + venue_merge + archive
   experiments/            Slug + semver + repo-state + env-capture + version-registration
-  migrate/                Repo-walk + classify + zip/unzip + per-entry compression + merge policy
-  common/io.py            Single source of truth for inputs/outputs paths
+                          + designs + feasibility + status
+  figures/                slug + scope resolution + SVG/matplotlib export + reference library
+  pseudocode/             slug + scope + lint + preamble injector + standalone compile
+  migrate/                Repo-walk + classify + zip/unzip + per-entry compression + merge
+                          policy + external-artifacts + reindex JSONL
+  common/                 io.py (paths) + git.py (subprocess wrapper) + frontmatter.py (YAML)
 
-.claude/skills/           MVP skills (lit-summarize, idea-validate, paper-architect,
+.claude/skills/           Project skills (lit-summarize, idea-validate, paper-architect,
                           ref-manager, research-mentor, experiment-runner, figure-tool,
-                          migrate-tool, pseudocode-tool) — Claude-Code-discoverable
-.claude/commands/         Slash entry points (/summarize, /idea-check, /paper,
-                          /cite, /convert, /mentor [boss …], /past-work,
-                          /boss (alias for /mentor boss), /experiment,
-                          /figure, /migrate, /pseudocode)
+                          pseudocode-tool, migrate-tool, research-swarm)
+                          + RuFlo V3 framework skills — all Claude-Code-discoverable.
+.claude/commands/         13 slash entry points (/summarize, /idea-check, /scout-swarm,
+                          /paper, /cite, /convert, /mentor [boss …], /past-work,
+                          /boss (alias for /mentor boss), /experiment, /figure,
+                          /pseudocode, /migrate).
 .claude/agents/           RuFlo V3 framework agents (89 included) + domain agents
-                          (past-work-historian, boss-historian)
+                          (past-work-historian, boss-historian).
 
 docs/                     Shared templates + per-feature docs (committed):
                           past-work-template.md, direction-template.md,
@@ -98,23 +109,42 @@ ruvector.db               Per-user AgentDB memory (gitignored)
 
 ```
 inputs/papers/*.pdf  ──┐
-arXiv URL / DOI     ──┴──▶ /summarize ──▶ outputs/summaries/<slug>.md
-                                            + AgentDB memory_store(namespace="papers")
+arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<slug>.md  + AgentDB papers/
                                                        │
                                                        ▼
-                                          /idea-check  (horizontal | vertical)
+                                          /idea-check  (socratic → brainstorm → scout →
+                                                        contrarian → evaluate → venues →
+                                                        knowledge → handoff)
                                                        │
                                                        ▼
-                                          /paper       (venue | direction | scout |
-                                                        focus | motivate | write |
-                                                        status)
+                                          /paper       (venue → direction → bind → scout →
+                                                        focus → motivate → write → render →
+                                                        humanize → review → status)
+                                                       │
+                                                       │     ╔════════════════════╗
+                                                       ├────▶║ /experiment        ║
+                                                       │     ║ init → design →    ║
+                                                       │     ║ feasibility →      ║
+                                                       │     ║ version add →      ║
+                                                       │     ║ analyze            ║
+                                                       │     ╚════════════════════╝
+                                                       │              │
+                                                       │              ▼
+                                                       │     /figure new, /pseudocode new
+                                                       │              │
+                                                       ▼              ▼
+                                          /cite + /convert   (used by /paper write+render)
                                                        │
                                                        ▼
-                                          /cite + /convert
+                                          /mentor      (weekly checkin · research-notes ·
+                                                        past-work · /boss prep)
                                                        │
                                                        ▼
-                                          /mentor      (weekly drift check)
+                                          /migrate     (cross-machine transfer)
 ```
+
+`/scout-swarm` runs alongside `/paper scout` when ruflo MCP tools are available;
+otherwise it tells the user to call `/paper scout` directly.
 
 Skills read/write AgentDB via the `claude-flow` MCP server:
 - `mcp__claude-flow__memory_store` — index summaries / ideas / check-ins.
@@ -139,6 +169,31 @@ ruff check src tests
 - ALWAYS run `pytest` after touching anything under `src/research_assistant/`.
 - If a skill needs a new helper, add the function in `src/research_assistant/<feature>/`
   rather than in the skill prompt — keeps the prompt thin.
+
+## Response style
+
+Output balance is a correctness concern, not a personality one. Apply the
+following whenever responding to the user:
+
+- **Avoid flattery and sycophancy.** Don't open with praise ("great question",
+  "excellent point") or affirm a claim just because the user made it. Treat
+  agreement as a load-bearing signal — only say "you're right" when you've
+  actually verified it.
+- **Assume neither side is infallible.** Your answers may be wrong, and the
+  user's judgments may be wrong too. Stay open to the possibility that the
+  prevailing framing of the question is flawed; flag it when you see it
+  instead of silently working around it.
+- **Scrutinize every claim before stating it.** Prefer running the check
+  (read the code, run the test, grep for the symbol, ground-truth the path)
+  over asserting from memory. When a check is impossible, say what you're
+  inferring vs. what you've verified.
+- **Ask for evidence when something is genuinely ambiguous.** Better to
+  pause for one targeted clarification than to guess and have to undo five
+  steps later. Be specific in the ask — name the file, the flag, the
+  scenario — so the user can answer in one sentence.
+- **Keep responses structured.** Lead with the conclusion or the change;
+  follow with the why and the evidence; use short sections and lists when
+  there's more than one independent point. Prose-only walls are a smell.
 
 ## Working in this repo (behavioral rules)
 
@@ -181,7 +236,7 @@ git clone git@github.com:xxx1766/lucky-research.git
 cd lucky-research
 pip install -e ".[dev]"
 # drop papers into inputs/papers/
-# open in Claude Code; the 6 slash commands appear automatically
+# open in Claude Code; all 13 slash commands appear automatically
 ```
 
 Per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/`) is gitignored. Only the
@@ -300,8 +355,10 @@ behavior.
 | `memory_search_unified` | Search across ALL namespaces |
 | `memory_bridge_status` | Show bridge health, vectors, SONA, intelligence |
 
-The five MVP skills use these tools directly. Namespaces by convention: `papers/`,
-`ideas/`, `drafts/`, `project/`.
+The project skills use these tools directly. Namespaces by convention: `papers/`,
+`ideas/`, `drafts/`, `project/` (with sub-keys like `project/paper-context`,
+`project/experiment-context`, `project/idea-context`,
+`project/research-notes-context`, `project/past-work/`, `project/boss/`).
 
 ## Discovering more MCP tools
 

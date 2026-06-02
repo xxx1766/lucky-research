@@ -11,7 +11,7 @@ track your trajectory over time, and migrate the whole workspace across machines
 | Slash | Skill / agent | What it does |
 |---|---|---|
 | `/summarize`   | `lit-summarize`            | Summarize PDFs (`inputs/papers/*.pdf`) or arXiv URLs into structured markdown; index in AgentDB `papers/`. |
-| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (socratic → brainstorm → scout → contrarian → evaluate → venues → knowledge → handoff). Plus legacy `horizontal` / `vertical` modes. |
+| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) plus two micro-flows (`brainstorm` at 1.5, `contrarian` at 2.5). Legacy `horizontal` / `vertical` modes still supported. |
 | `/scout-swarm` | `research-swarm` (optional)| Optional ruflo accelerator — parallelize `/paper scout` with a researcher swarm. Degrades to "use `/paper scout`" when swarm tools are absent. |
 | `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`        | `ref-manager`              | Scan LaTeX `\cite{...}` keys and merge BibTeX into `<direction>/refs.bib`. |
@@ -52,23 +52,29 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 3.  /idea-check "<free-text>"       → Socratic → brainstorm → scout → contrarian →
                                        evaluate → venues → knowledge → handoff
                                        (sets the /paper cursor)
-4.  /paper venue NeurIPS-2026       → outputs/papers/NeurIPS-2026/_venue.md
-                                       (optionally `cp -r docs/venues/NeurIPS/2026/* .`
-                                       for the conference _template/)
+4.  /paper venue OSDI-2027          → outputs/papers/OSDI-2027/_venue.md
+                                       (optionally `cp -r docs/venues/OSDI/2027/* .`
+                                       for the conference _template/ — OSDI/2027/
+                                       is the only venue template that ships in-repo;
+                                       use any `<CONF>-<YEAR>` slug for venues you
+                                       maintain yourself)
 5.  /paper direction <slug>         → expert.md + status.md
 6.  /experiment init                → outputs/experiments/<slug>/manifest.md
                                        (or /paper bind to an existing experiment)
 7.  /paper scout                    → <direction>/related-papers/*.md
-8.  /experiment design + feasibility + version add → versions/<vN.M>.md
+8.  /experiment design + feasibility + version add + analyze
+                                    → versions/<vN.M>.md + results/<latest>/analysis.{tex,md}
 9.  /paper focus → motivate         → focused-problem.md + experiments/{motivation,benchmark}.md
 10. /figure new <slug>              → <scope>/figures/<slug>.{svg,pdf,note.md}
+                                       (matplotlib data plots: <slug>.{py,pdf,png,note.md})
 11. /pseudocode new <slug>          → <scope>/algorithms/<slug>.{tex,pdf,note.md}
 12. /paper write [section]          → outline.md (no section) OR sections/<section>.tex
                                        + auto-rendered main.pdf
 13. /cite                           → <direction>/refs.bib
 14. /paper humanize + review        → reviews/{humanize,review}-<date>.md
-15. /mentor                         → weekly check-in vs goals
-16. /migrate export                 → outputs/migrate/migrate-<host>-<ts>.zip
+15. /paper archive                  → inputs/past-work/<slug>/paper/  (when done)
+16. /mentor                         → weekly check-in vs goals
+17. /migrate export                 → outputs/migrate/migrate-<host>-<ts>.zip
                                        (restore on a new machine with /migrate import)
 ```
 

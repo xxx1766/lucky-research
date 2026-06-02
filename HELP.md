@@ -41,7 +41,9 @@ Glossary:
 
 ## 💡 `/idea-check` — validate an idea (skill: `idea-validate`)
 
-A 6-stage Socratic flow. State is mirrored on disk **and** in AgentDB.
+A 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge →
+handoff`) plus two interstitial micro-flows (`brainstorm` 1.5 and `contrarian`
+2.5). State is mirrored on disk **and** in AgentDB.
 
 | Subcommand | Purpose |
 |---|---|
@@ -80,8 +82,6 @@ A 6-stage Socratic flow. State is mirrored on disk **and** in AgentDB.
 - Writes per-paper summaries under `<direction>/related-papers/<slug>.md`.
 - AgentDB `papers/<slug>`.
 
-> ⚠️ Known issue: cursor read key shape disagrees with `/paper`; manual cursor entry may be required.
-
 ---
 
 ## 📝 `/paper` — venue-rooted paper flow (skill: `paper-architect`)
@@ -106,13 +106,13 @@ The biggest command surface. All paths are `outputs/papers/<venue>/<direction>/`
 | `/paper render` | Re-render `main.pdf` only. |
 | `/paper humanize [<section>] [--dry-run]` | Strip AI-tone from `.tex`; saves audit to `reviews/`. |
 | `/paper review [--target <venue>]` | Reviewer-perspective audit of `main.pdf` → `reviews/`. |
-| `/paper status [<v>/<d>] [--all]` | Print + persist 9-stage progress board to `status.md`. |
+| `/paper status [<v>/<d>] [--all]` | Print + persist 7-stage progress board to `status.md`. |
 | `/paper archive [<v>/<d>] [--abandoned]` | Move finished paper to `inputs/past-work/<slug>/paper/`. |
 | `/paper unarchive <slug>` | Reverse archive. |
 | `/paper archive list` | Table of archived papers. |
 
 - Per-direction artifacts: `expert.md, focused-problem.md, related-papers/, experiments/{motivation,benchmark}.md, outline.md, main.tex, sections/*.tex, refs.bib, main.pdf, status.md, reviews/`.
-- Helpers: `papers/{__init__, _sync, binding, archive, venue_refs, venue_merge, venue_family, related_experiments}.py`.
+- Helpers: `papers/{__init__, _sync, binding, archive, _archive_extract, venue_refs, venue_merge, venue_conventions, venue_family, related_experiments}.py`.
 - AgentDB: `papers/venue-style/<venue>/<paper>`, `drafts/<venue>/<direction>`, cursor `project/paper-context.current`, bindings `project/paper-bindings.<v>__<d>`.
 - LaTeX render via `refs/__init__.py:render_latex` (tectonic → latexmk → xelatex → pdflatex).
 
@@ -257,9 +257,10 @@ Scoped to current `(venue, direction)` OR experiment slug. Helpers in `figures/`
 | `/figure ref sync` | Re-walk `inputs/figure-refs/` and index into AgentDB. |
 | `/figure ref show <slug>` | Print note + image path of one ref. |
 
-- Per-figure files: `<scope>/figures/<slug>.{svg,pdf,png}` + `<slug>.note.md`.
+- Per-figure files (structural / SVG): `<scope>/figures/<slug>.{svg,pdf,png}` + `<slug>.note.md`.
+- Per-figure files (matplotlib data plots): `<scope>/figures/<slug>.{py,pdf,png}` + `<slug>.note.md` (no `.svg`).
 - Reference library: `inputs/figure-refs/<slug>/` + `figure-refs/_index.md`.
-- AgentDB `figures/refs/<slug>`.
+- AgentDB `project/figure-refs/<slug>`.
 - Backends: structural SVG (or D2-scaffolded SVG) for architecture/pipeline/concept figures; matplotlib for data plots.
 
 ---
@@ -323,7 +324,7 @@ arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<
                                           /paper       (venue → direction → bind →
                                                         scout → focus → motivate →
                                                         write → render → humanize →
-                                                        review → status)
+                                                        review → status → archive)
                                                        │
                                                        │     ╔════════════════════╗
                                                        ├────▶║ /experiment        ║
