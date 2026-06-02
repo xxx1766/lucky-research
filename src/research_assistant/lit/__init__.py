@@ -10,7 +10,12 @@ import re
 from pathlib import Path
 
 _ARXIV_ID_RE = re.compile(r"\b(\d{4}\.\d{4,5}(v\d+)?)\b")
-_PDF_CREATION_DATE_RE = re.compile(r"D:(\d{4})")
+# PyMuPDF normalizes most modern PDFs to the info-dict ``D:YYYYMMDD…`` form,
+# but plenty of older or hand-exported PDFs ship the raw ``YYYY-MM-DD`` /
+# ``YYYY:MM:DD`` string instead. Match any 4-digit year, prefer the D:-form
+# when present so the first match in a string like ``D:20240512000000+02'00'``
+# still picks 2024 (not 0000 from the trailing timestamp).
+_PDF_CREATION_DATE_RE = re.compile(r"D:(\d{4})|\b(19|20)(\d{2})\b")
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -104,8 +109,9 @@ def _year_from_date(value: str | None) -> int | None:
     m = _PDF_CREATION_DATE_RE.search(value)
     if not m:
         return None
+    raw = m.group(1) or f"{m.group(2)}{m.group(3)}"
     try:
-        year = int(m.group(1))
+        year = int(raw)
     except ValueError:
         return None
     return year if 1900 <= year <= 2100 else None

@@ -8,6 +8,7 @@ import pytest
 
 from research_assistant.lit import (
     _normalize_arxiv_id,
+    _year_from_date,
     extract_pdf_text,
     fetch_arxiv,
     parse_metadata,
@@ -113,6 +114,20 @@ def test_fetch_arxiv_uses_search_and_downloads(tmp_path):
     patched.assert_called_once_with(id_list=["2401.12345"])
     fake_result.download_pdf.assert_called_once()
     assert out == tmp_path / "2401.12345.pdf"
+
+
+def test_year_from_date_handles_iso_and_dcolon_forms():
+    """PyMuPDF normalizes modern PDFs to ``D:YYYYMMDD…`` but hand-exported /
+    older PDFs ship raw ``YYYY-MM-DD`` or ``YYYY:MM:DD``. All three forms
+    must yield the same year, otherwise arXiv exports silently get year=None.
+    """
+    assert _year_from_date("D:20240512000000+02'00'") == 2024
+    assert _year_from_date("2024-05-12") == 2024
+    assert _year_from_date("2024:05:12 11:00:00") == 2024
+    assert _year_from_date(None) is None
+    assert _year_from_date("") is None
+    # Years outside the 1900-2100 sanity window are rejected.
+    assert _year_from_date("1500-01-01") is None
 
 
 def test_fetch_arxiv_raises_when_not_found(tmp_path):

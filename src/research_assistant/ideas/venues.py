@@ -9,6 +9,7 @@ intends to target.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -131,17 +132,26 @@ def _user_curated_venue_slugs() -> set[str]:
     curated: set[str] = set()
     registry_lookup = {v.slug.lower(): v.slug for v in VENUE_REGISTRY}
     registry_lookup.update({v.name.lower(): v.slug for v in VENUE_REGISTRY})
+    # Strip the optional trailing ``-YYYY`` year suffix so multi-token slugs
+    # like ``usenix-sec-2027`` reduce to the registry's ``usenix-sec`` instead
+    # of being mangled by the alpha-only fallback (which produces ``usenixsec``
+    # and silently fails to match anything).
+    year_suffix_re = re.compile(r"-(19|20)\d{2}$")
     for venue_dir in PAPERS_DIR.iterdir():
         if not venue_dir.is_dir():
             continue
         if not (venue_dir / "_venue.md").is_file():
             continue
-        # Match either the venue dir name (e.g. "OSDI-2027" → "osdi") or its
-        # leading alphabetic prefix.
         name_lower = venue_dir.name.lower()
         if name_lower in registry_lookup:
             curated.add(registry_lookup[name_lower])
             continue
+        # Try the year-stripped form first (preserves internal hyphens).
+        without_year = year_suffix_re.sub("", name_lower)
+        if without_year != name_lower and without_year in registry_lookup:
+            curated.add(registry_lookup[without_year])
+            continue
+        # Last-resort alpha-only fallback — only matches single-token slugs.
         prefix = "".join(c for c in name_lower if c.isalpha())
         if prefix and prefix in registry_lookup:
             curated.add(registry_lookup[prefix])

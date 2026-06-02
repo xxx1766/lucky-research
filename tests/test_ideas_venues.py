@@ -49,6 +49,19 @@ def test_user_curated_venue_is_boosted(fake_papers_dir):
     assert matches[0].venue.slug == "sosp"
 
 
+def test_user_curated_multi_token_venue_matches_with_year_suffix(fake_papers_dir):
+    """Curated dir like ``USENIX-SEC-2027`` must match registry slug
+    ``usenix-sec``. The old alpha-only fallback produced ``usenixsec`` and
+    silently failed."""
+    venue_dir = fake_papers_dir / "USENIX-SEC-2027"
+    venue_dir.mkdir()
+    (venue_dir / "_venue.md").write_text("# USENIX Security\n", encoding="utf-8")
+
+    matches = suggest_venues(["sec"], today=date(2026, 5, 15), top_k=10)
+    by_slug = {m.venue.slug: m for m in matches}
+    assert by_slug["usenix-sec"].is_user_curated
+
+
 def test_next_deadline_picks_future_year(fake_papers_dir):
     # ICML deadline_month=1; today in May → next deadline should be Jan next year.
     matches = suggest_venues(["ml"], today=date(2026, 5, 15), top_k=10)
