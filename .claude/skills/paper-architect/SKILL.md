@@ -344,6 +344,16 @@ venue: NeurIPS-2026
 direction: diffusion-finetune
 code_repo: "github:xxx1766/diffusion-finetune-exp"   # optional
 created: 2026-05-12
+# --- binding fields (set by Stage 0 /paper bind, not direction) ---
+experiment: weightlet-1                             # optional; primary binding
+experiments: [weightlet-1, sparse-attn-2]           # optional; ALL bindings,
+                                                    # consumed by Stage 3 scout
+                                                    # (find_experiments_for_paper)
+                                                    # and surfaced as "local
+                                                    # experiments touching this
+                                                    # direction". Primary is
+                                                    # auto-included; list extras
+                                                    # here to surface them too.
 ---
 ```
 

@@ -266,3 +266,43 @@ def test_list_archived_filters_to_paper_subdirs(tmp_path, monkeypatch):
 def test_list_archived_empty_when_no_archives(tmp_path, monkeypatch):
     _stub_dirs(tmp_path, monkeypatch)
     assert list_archived() == []
+
+
+# ---------- _strip_latex_minimal ----------
+
+def test_strip_latex_minimal_drops_line_comments():
+    # Bare `%` to end-of-line should be treated as a LaTeX comment and removed.
+    from research_assistant.papers.archive import _strip_latex_minimal
+
+    text = "first line.\nsecond % trailing comment\nthird line."
+    out = _strip_latex_minimal(text)
+    assert out == "first line. second third line."
+
+
+def test_strip_latex_minimal_preserves_escaped_percent():
+    # ``\%`` is a literal percent sign in LaTeX (escaped) and must survive
+    # the comment-stripper — historic gap that this test locks in.
+    from research_assistant.papers.archive import _strip_latex_minimal
+
+    text = "We measured 75\\% accuracy across runs."
+    out = _strip_latex_minimal(text)
+    assert "75\\%" in out
+    assert out == "We measured 75\\% accuracy across runs."
+
+
+def test_strip_latex_minimal_collapses_whitespace_and_strips():
+    from research_assistant.papers.archive import _strip_latex_minimal
+
+    text = "  spaced\n\n  out  \tlines  \n"
+    out = _strip_latex_minimal(text)
+    assert out == "spaced out lines"
+
+
+def test_strip_latex_minimal_mixed_escaped_and_comment_on_same_line():
+    # An escaped \% followed later by a real % comment should keep the literal
+    # percent and drop the tail comment.
+    from research_assistant.papers.archive import _strip_latex_minimal
+
+    text = "Got 90\\% recall % FIXME numbers are stale"
+    out = _strip_latex_minimal(text)
+    assert out == "Got 90\\% recall"
