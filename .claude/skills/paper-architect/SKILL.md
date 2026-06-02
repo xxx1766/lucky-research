@@ -25,6 +25,20 @@ The "current paper" is just a `(venue, direction)` tuple stored in AgentDB
 `project/paper-context`. Every stage reads it; the `venue` and `direction` subcommands
 write it.
 
+## References (load on demand)
+
+Stable, detail-heavy content lives in `references/` so this SKILL stays scan-
+nable. Each entry below names the file and what it contains, and the stages
+that pull it in:
+
+| File | Contents | Loaded by |
+|---|---|---|
+| `references/section-heuristics.md` | Per-section-kind Do/Don't/Beats lists (adapted from xxx1766's "how to write a paper"). Includes the `<synonym map>` for `design`/`approach`→`method`, `evaluation`/`eval`→`results`, …, the `## section: <kind>` blocks, and `## family: <name>` additive overrides for `systems` / `nlp` / `cv`. | Stage 6 (always, before drafting any section) |
+| `references/latex-conventions.md` | Project-wide LaTeX style rules: `hard-rules` (no `---`, no `--` outside numeric ranges, no bare `;`, Chinese-comment shape), math notation, tables-and-figures (`Caption format` etc.), word choice, tense, citations, paragraph layout, pre-submission checklist. | Stage 6 (always); Stages 8.5 / 8.6 (lint reference) |
+| `references/write-workflow.md` | Stage 6's full step-by-step: cross-cutting principles, no-section-given path, section-given path (kind resolution, family stacking, intro funnel gate, title revisit, draft, banned-phrase scan, hard-rule lint, `% TODO` block), figure-inclusion + algorithm-inclusion blocks (with the exact `\includegraphics` / `\input{algorithms/...}` shapes and `<W>` size mapping), auto-render fallback chain. | Stage 6 (when drafting begins) |
+| `references/humanize-prompt.md` | Verbatim "去 AI 味（LaTeX 英文）" prompt prelude. Three-part response format (`Part 1 [LaTeX]`, `Part 2 [Translation]`, `Part 3 [Modification Log]`); `[检测通过]` sentinel meaning "already natural, skip rewrite". | Stage 8.5 (`/paper humanize`) |
+| `references/review-prompt.md` | Verbatim reviewer-perspective audit prompt. Two-part response (`Part 1 [The Review Report]`, `Part 2 [Strategic Advice]`); uses the `{{TARGET_VENUE}}` token (substituted in code, model never sees it). | Stage 8.6 (`/paper review`) |
+
 ## Progress display
 
 Every `/paper` subcommand ends by printing a **one-line progress footer** so the user
@@ -408,246 +422,77 @@ experiments: [weightlet-1, sparse-attn-2]           # optional; ALL bindings,
 
 ## Stage 6 — `/paper write [section]`
 
-This stage is **LaTeX-native**: paper prose goes into `.tex` files that build to a
-real PDF via the conference template. Markdown planning artifacts (`outline.md`,
-`focused-problem.md`, `experiments/*.md`) stay Markdown.
+This stage is **LaTeX-native**: paper prose goes into `.tex` files that build to
+a real PDF via the conference template. Markdown planning artifacts
+(`outline.md`, `focused-problem.md`, `experiments/*.md`) stay Markdown.
 
-**Writing habits (read before drafting any section)**
+**Before drafting anything, load these references** (full content described in
+the [References](#references-load-on-demand) section near the top of this
+file):
 
-Always load `references/section-heuristics.md`. It carries the per-section
-do/don't/beat lists adapted from
-[xxx1766's "how to write a paper"](https://xxx1766.github.io/2026/03/19/how-to-write-paper/),
-plus the cross-cutting principles below. Treat it as a *required* prelude — it
-overrides default drafting habits (IMRAD order, "we propose…" openers, etc.).
+- `references/section-heuristics.md` — per-section Do/Don't/Beats lists +
+  venue-family overrides. Required prelude.
+- `references/latex-conventions.md` — project-wide LaTeX style rules. Required
+  prelude.
+- `references/write-workflow.md` — the full Stage-6 decision flow this section
+  summarises. Load when you actually start drafting.
 
 **Resolve the venue family** before reading any section block. Call
 `research_assistant.papers.family_for_venue(venue)`; it returns one of
-`systems` / `nlp` / `cv` / `ml` / `db` / `ir` / `default`. The resolver
-checks `_venue.md` for an explicit `Family: <name>` override line first,
-then falls back to a built-in venue-prefix map. When the family is
-`systems`, `nlp`, or `cv`, `section-heuristics.md` carries a matching
-`## family: <name>` block with **additive** `### <kind>` sub-blocks — extra
-Do / Don't / Beats items to layer on top of the default `## section: <kind>`
-block. (`ml`, `db`, `ir` resolve correctly but don't have sub-blocks yet,
-so they degrade to the default heuristics.) Users can pin a niche venue to
-the closest family by adding one line to their `_venue.md`:
+`systems` / `nlp` / `cv` / `ml` / `db` / `ir` / `default`. The resolver checks
+`_venue.md` for an explicit `Family: <name>` override line first, then falls
+back to a built-in venue-prefix map. When the family is `systems`, `nlp`, or
+`cv`, `section-heuristics.md` carries a matching `## family: <name>` block with
+**additive** `### <kind>` sub-blocks — extra Do / Don't / Beats items to layer
+on top of the default `## section: <kind>` block. Users can pin a niche venue
+to the closest family by adding `Family: systems` to its `_venue.md`.
 
-```
-Family: systems
-```
+**Cross-cutting principles (full prose in `write-workflow.md`):**
 
-Always load `references/latex-conventions.md`. It carries the project-wide
-LaTeX style rules (hard rules, math notation, tables and figures, word choice,
-tense, citations, paragraph layout, pre-submission checklist). It applies to
-every section regardless of kind, and to every `.tex` file under
-`outputs/papers/<venue>/<direction>/`. When a venue note in `_venue.md`
-conflicts with a rule in `latex-conventions.md`, project rules win.
+- **Drafting order is figures → method → results → related-work → intro →
+  abstract → title** — not IMRAD. Method first locks vocabulary; title last
+  because abstract narrows what title can promise.
+- **Funnel-gate the introduction.** Before drafting `intro`, plain-text prompt
+  `"Funnel check: broad → existing → best → limitations → goal? (yes / draft
+  anyway / abort)"`; on `abort`, stop.
+- **Banned phrases in intro.** After writing `sections/intro.tex`, grep for
+  `novel|first ever|first time|paradigm-(changing|shifting)|we propose`; warn
+  with line numbers, no auto-rewrite.
+- **Hard-rule lint** (every `.tex` write): grep for stray `;`, `---`, and `--`
+  outside numeric ranges. Definitions in `latex-conventions.md` →
+  `hard-rules`. Warnings only.
+- **Chinese translation comments** above every English paragraph in body
+  prose (skip `algorithms/*.tex`, `refs.bib`, preamble). Exact shape in
+  `latex-conventions.md` → `hard-rules`.
+- **Title-revisit** at the end of Stage 6: re-read `\title{}` against the now-
+  stable abstract; propose 3 revisions; let the user pick.
 
-Cross-cutting principles enforced in this stage:
+**Workflow summary** — `write-workflow.md` has the full step-by-step. The two
+top-level branches are:
 
-- **Drafting order is not IMRAD.** The blog's order — and therefore this skill's
-  default — is **figures → method → results → related-work → intro → abstract → title**.
-  Method first because it locks the vocabulary every other section reuses; intro
-  late because its funnel depends on the headline number from results; title last
-  because the abstract narrows what the title can promise.
-- **Title is provisional at outline time, final after abstract stabilises.** Stage 6
-  ends with a `title-revisit` step that re-reads `\title{}` against the now-stable
-  abstract.
-- **Funnel-gate the introduction.** Before drafting `intro`, print a plain-text
-  prompt: `"Funnel check: have you discussed broad → existing → best → limitations
-  → this paper's goal with your advisor? (yes / draft anyway / abort)"`. On
-  `abort`, stop without writing. (Plain text, not `AskUserQuestion` — research
-  picks belong in the chat.)
-- **Banned phrases in intro.** After writing `sections/intro.tex`, grep
-  case-insensitively for `novel`, `first ever`, `first time`, `paradigm-changing`,
-  `paradigm-shifting`, `we propose`. Any hit prints a warning with line numbers —
-  do not auto-rewrite, the user decides.
-- **Hard-rule lint (every section).** After writing any `.tex` file in this
-  stage, grep for the three project hard rules (full definitions in
-  `references/latex-conventions.md` section `hard-rules`):
-  * `;` on a line that is not pure LaTeX command and does not contain `\;`
-    spacing and is not inside a `verbatim` / `lstlisting` / `minted` block →
-    warn with line numbers.
-  * `---` anywhere → warn with line numbers.
-  * `--` not matching `\d+--\d+` (numeric range) → warn with line numbers.
-  Print warnings only. Do not auto-rewrite; the user decides.
-- **Chinese translation comments.** When writing or rewriting any English
-  paragraph in a `.tex` file under `outputs/papers/<venue>/<direction>/` (body
-  prose only — skip `algorithms/*.tex`, `refs.bib`, and the preamble), emit
-  the Chinese translation immediately above the paragraph as `%` LaTeX
-  comments. One `%` line per English source line, wrap to similar visual
-  width. If a Chinese comment block already exists above a paragraph you
-  rewrite, update the Chinese to match the new English so the two stay in
-  sync. See `references/latex-conventions.md` section `hard-rules` for the
-  exact shape.
+- **No section given** → generate `outline.md`, scaffold `main.tex +
+  sections/ + refs.bib`, call `pseudocode.preamble.ensure_preamble(...)`,
+  surface unmade figures (one `→ /figure new <slug>` per outline figure row),
+  print the recommended drafting order.
+- **Section given** → resolve kind via synonym map, layer family block,
+  read context (`expert.md`, `focused-problem.md`, `experiments/*`,
+  `related-papers/`, prior `sections/*.tex`); for `results`-kind sections,
+  also call `papers.collect_experiment_results_for_paper(venue, direction)`
+  and prefer the experiment's `analysis_tex` as authoritative; intro funnels
+  through the gate above; title triggers title-revisit; otherwise draft
+  `sections/<section>.tex`, run banned-phrase scan + hard-rule lint, append
+  `% TODO:` block.
+- **Figure inclusion** and **algorithm inclusion** patterns (the exact
+  `\begin{figure}[t]` / `\input{algorithms/<slug>.tex}` blocks plus the
+  `<W>` size mapping and the experiment-scope path variants) are in
+  `write-workflow.md`.
 
-**Workflow**
+**Auto-render** after every successful section write — full fallback chain
+(tectonic → latexmk, missing-toolchain hint, last-40-log on failure, never
+undo the write) is in `write-workflow.md`.
 
-- If no section given (first write call):
-  1. Generate `outline.md` — section-by-section plan grounded in `expert.md` +
-     `focused-problem.md` + `experiments/`. Markdown, not LaTeX.
-  2. Scaffold the LaTeX skeleton if missing:
-     - `<direction>/main.tex` — `\documentclass` pointing at `../_template/`,
-       `\input`s each `sections/<name>.tex`, sets `\bibliography{refs}`.
-     - `<direction>/sections/` — empty directory.
-     - `<direction>/refs.bib` — empty file.
-     - Call `research_assistant.pseudocode.preamble.ensure_preamble(<direction>/main.tex, venue_md_path=<venue>/_venue.md)` so the algorithm package (`algorithm + algpseudocode` by default, or `algorithm2e` if the venue opts in) is in the preamble from day one. Idempotent — safe to call on every write.
-  3. **Surface unmade figures.** Read `outline.md`'s figure table; for every row
-     whose source figure isn't in `figures/` (or, for experiment-scope figures,
-     `repo/figures/<vN.M>/`), print `→ /figure new <slug>` so figures land before
-     Method drafting (figures lock the vocabulary the prose then quotes).
-  4. **Print the recommended next-call sequence** in the blog's order, mapped onto
-     the outline's actual section names. Use the synonym map in
-     `references/section-heuristics.md` (`design`/`approach` → `method` kind,
-     `evaluation`/`eval` → `results` kind, …). Example output:
-     ```
-     Recommended drafting order:
-       1. /paper write design        # method kind
-       2. /paper write evaluation    # results kind
-       3. /paper write related-work
-       4. /paper write discussion
-       5. /paper write intro         # funnel-gated
-       6. /paper write abstract
-       7. /paper write title         # revisit \title{}
-     ```
-     One section per invocation — the skill does not auto-loop.
-- If section given (`intro` / `method` / `results` / `discussion` / ...):
-  1. **Resolve the section's kind** via the synonym map in
-     `references/section-heuristics.md` and read the matching
-     `## section: <kind>` block. If no match, use `## section: default`.
-     **Also layer the family block** — read the matching
-     `## family: <family>` → `### <kind>` sub-block (when one exists) and
-     treat its Extra Do / Extra Don't / Extra Beats items as additions to
-     the default kind block. The default kind block always applies; the
-     family block stacks on top.
-  2. **Read the cross-cutting block** plus `expert.md`, `focused-problem.md`,
-     `experiments/*`, `related-papers/`, `outline.md`'s block for this section,
-     and any existing `sections/*.tex` for tone + terminology consistency.
-  2.5. **For `results`-kind sections, pull in bound-experiment outputs.** Call
-     `research_assistant.papers.collect_experiment_results_for_paper(venue, direction)`
-     to enumerate every experiment bound to this direction, paired with its
-     latest mirrored `outputs/experiments/<slug>/results/<latest>/`. For each
-     hit:
-     - If `analysis_tex` is set, **read it** and treat it as the experiment's
-       authoritative result paragraphs — designed to be pasted under
-       `\section{Results}` with no rewriting. `/experiment analyze` enforces
-       the no-`\textbf` / no-`\emph` / `\paragraph{Title Case}` shape.
-     - If `analysis_md` is set, read it too — that's the audit log with
-       Chinese translation that lets you spot-check numbers you reuse.
-     - If `results_dir` is set but `analysis_tex` is `None`, the user has
-       run `version add` but not yet `/experiment analyze`. Print a one-line
-       hint (`→ /experiment analyze` for `<slug>`) and continue drafting
-       from the raw mirrored files in `other_files`.
-     - If `latest_version` is `None`, the experiment is bound but no version
-       has been registered. Skip it for prose; surface a hint instead.
-  3. **Intro gate.** If kind is `intro`, run the funnel check above; on `abort`,
-     stop.
-  4. **Title revisit.** If kind is `title`, do not draft a new section file —
-     instead: read the current `\title{}` from `main.tex` and the abstract from
-     `sections/abstract.tex`; propose 3 revised titles (8–12 English words,
-     concise + specific, no banned padding); let the user pick (plain text) or
-     reply with their own; rewrite `\title{...}` in `main.tex`. Skip the `% TODO`
-     block and the figure/algorithm includes (none apply to titles).
-  5. **Draft `<direction>/sections/<section>.tex`.** Prepend the heuristics block's
-     Do / Don't / Beats lists at the top of your reasoning before writing — every
-     paragraph should be traceable to a beat. **Cite directly as `\cite{<slug>}`**
-     (no `[@cite:]` placeholder). `<slug>` should match `papers/<slug>` in AgentDB
-     so `/cite` can resolve it into `refs.bib`.
-  6. **Banned-phrase scan.** If kind is `intro`, after writing the file run
-     `grep -niE 'novel|first ever|first time|paradigm-(changing|shifting)|we propose' sections/intro.tex`
-     and print each hit; suggest a rewrite but leave the file as-is.
-  7. Append a `% TODO:` LaTeX comment block listing experiments still needed.
-- **Auto-render** after every successful section write:
-  1. Verify `outputs/papers/<venue>/_template/` exists and is non-empty. If missing,
-     print the expected drop location and **skip** the render — the `.tex` write
-     itself still succeeded.
-  2. Shell out to `tectonic` (preferred) or fall back to `latexmk -pdf`. Run from the
-     direction directory so `../_template/` resolves.
-  3. On success: tell the user the path to `main.pdf`.
-  4. On build failure: print the last ~40 lines of the log; do **not** undo the
-     write. User fixes the `.tex` and runs `/paper render` to retry.
-  5. If neither toolchain is on PATH: print install hints
-     (`brew install tectonic` / `cargo install tectonic` /
-     `apt install texlive-latex-extra`) and skip the render.
-- After everything above (whether the render fired or not), print
-  `render_progress_footer(venue, direction, stage_status(direction_dir))`.
-
-### Figure inclusion
-
-When the section being drafted needs a figure:
-
-1. List `figures/*.pdf` in the current direction.
-2. If a slug matches the section's keyword (read the corresponding `<slug>.note.md`
-   `intent:` field for the match), pick it; otherwise list the available slugs and
-   ask the user.
-3. Emit the include block exactly in this form (no `\graphicspath`, explicit
-   path with `.pdf` extension):
-
-```latex
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=<W>]{figures/<slug>.pdf}
-  \caption{<polished English caption — see Caption format below>}
-  \label{fig:<slug>}
-\end{figure}
-```
-
-The caption argument follows
-`references/latex-conventions.md` section `tables-and-figures` →
-"Caption format": noun phrase = Title Case (no period), complete sentence =
-Sentence case (with period); no `The figure shows ...` openers; no
-`showcase` / `depict`. When the figure's `note.md` `intent:` is Chinese,
-polish it to an English caption per those rules before pasting — don't
-emit raw Chinese into `\caption{...}`.
-
-`<W>` is chosen from the figure's `size.preset`:
-
-* `single-column` → `\columnwidth`
-* `double-column-half` → `0.48\textwidth`
-* `double-column-full` → `\textwidth`
-* `custom` → `\columnwidth`
-
-If no matching `figures/<slug>.pdf` exists, suggest the user runs `/figure new <slug>` first — do not synthesise a placeholder include.
-
-For **experiment-scope** figures (referenced from a paper section discussing
-that experiment), the include path uses `repo/figures/<vN.M>/<slug>.pdf` —
-read the experiment's `versions/<vN.M>.md` `figures:` list (populated by
-`/figure new --scope experiment`) to enumerate.
-
-### Algorithm inclusion
-
-When the section being drafted needs an algorithm (method / approach sections
-almost always do):
-
-1. List `algorithms/*.tex` in the current direction.
-2. If a slug matches a section keyword (read the corresponding `<slug>.note.md`
-   `intent:` field for the match), pick it; otherwise list the available slugs
-   and ask the user. Each algorithm `.tex` is self-contained — it already
-   carries `\begin{algorithm} ... \end{algorithm}`, so the section just
-   `\input{}`s it (no extra wrapping).
-3. Emit the include block exactly in this form:
-
-```latex
-\input{algorithms/<slug>.tex}
-```
-
-   Or, if the section refers to the algorithm in prose without immediately
-   placing it, use `See Algorithm~\ref{alg:<slug>}.` and `\input{...}` the
-   algorithm at the natural reading position.
-
-4. If no matching `algorithms/<slug>.tex` exists, suggest the user runs
-   `/pseudocode new <slug>` first — do not synthesise a placeholder algorithm
-   box. Pseudocode is method-level documentation; it must be authored
-   deliberately, not auto-generated from incomplete context.
-
-5. The required `\usepackage` lines are kept in `main.tex` by
-   `pseudocode.preamble.ensure_preamble(...)` (called during scaffold and on
-   first `/pseudocode new`). No action needed here.
-
-For **experiment-scope** algorithms (referenced from a paper section discussing
-that experiment), the include path is `algorithms/<vN.M>/<slug>.tex`. Surface
-this only when the algorithm is intrinsically tied to one experiment version
-(e.g. an ablated sampler); otherwise prefer the paper-scope variant.
+After everything above (whether the render fired or not), print
+`render_progress_footer(venue, direction, stage_status(direction_dir))`.
 
 ## Stage 7 — `/paper status [<venue>/<direction>] [--all]`
 
