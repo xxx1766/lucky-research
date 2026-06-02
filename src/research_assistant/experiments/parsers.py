@@ -76,12 +76,14 @@ def parse_data_index(path: Path) -> list[DataArtifact]:
     if not file_path.is_file():
         return []
     text = file_path.read_text(encoding="utf-8")
+    from pydantic import ValidationError
+
     out: list[DataArtifact] = []
     for fm, body in split_blocks(text):
         fm.setdefault("description", body.strip())
         try:
             out.append(DataArtifact.model_validate(fm))
-        except Exception:
+        except ValidationError:
             continue
     return out
 
@@ -237,6 +239,8 @@ def iter_version_indexing_payloads(slug: str | None = None) -> list[dict]:
             p.name for p in _exp.EXPERIMENTS_DIR.iterdir()
             if p.is_dir() and not p.name.startswith(("_", "."))
         )
+    from pydantic import ValidationError
+
     out: list[dict] = []
     for s in slugs:
         versions_dir = _exp.EXPERIMENTS_DIR / s / "versions"
@@ -245,6 +249,6 @@ def iter_version_indexing_payloads(slug: str | None = None) -> list[dict]:
         for vfile in sorted(versions_dir.glob("v*.md")):
             try:
                 out.append(version_indexing_payload(s, vfile.stem))
-            except Exception:
+            except (ValidationError, ValueError, OSError):
                 continue
     return out

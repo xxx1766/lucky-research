@@ -97,7 +97,7 @@ def stage_status(slug: str) -> ExperimentStatus:
         from .paths import result_path  # local: avoid circular import at module load
         try:
             latest_results = result_path(slug, versions[-1])
-        except Exception:  # noqa: BLE001 - tolerate semver/path edge cases
+        except (ValueError, OSError):
             latest_results = None
         if latest_results is not None and latest_results.is_dir():
             has_analysis = (
@@ -215,7 +215,11 @@ def _board_detail(stage: str, s: ExperimentStatus) -> str:
             return "no versions yet"
         return f"{s.version_count} version(s) · latest {s.last_version}"
     if stage == "analyze":
-        return "ready to compare" if s.version_count >= 2 else "need ≥2 versions"
+        if s.has_analysis:
+            return "analysis written"
+        if s.version_count >= 2:
+            return "ready · run /experiment analyze"
+        return "need ≥2 versions"
     raise ValueError(f"unknown stage: {stage}")
 
 

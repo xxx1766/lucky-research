@@ -257,17 +257,13 @@ def fetch_bibtex_via_browser(doi: str, *, timeout: float = 60.0) -> str | None:
             body = response.text()
         except Exception:  # noqa: BLE001 - cloakbrowser surfaces many shapes
             body = page.content()
-    except ImportError:
-        # Caller (this very function) raises ImportError when cloakbrowser
-        # isn't installed — re-raise so the orchestrator can surface the
-        # install hint on `prefer_browser=True`.
-        raise
     except Exception:  # noqa: BLE001 - mirror tier 1/2 "never raise" contract
         # CloakBrowser / Playwright surface many exception types (TimeoutError,
         # Error, navigation errors, TLS, DNS). The orchestrator and `_main`
-        # treat this tier as best-effort; swallow everything except ImportError
-        # so the cite-as-you-write flow degrades gracefully on transient
-        # browser/network issues.
+        # treat this tier as best-effort; swallow everything so the
+        # cite-as-you-write flow degrades gracefully on transient
+        # browser/network issues. (The cloakbrowser-not-installed ImportError
+        # is already raised earlier, outside this try.)
         return None
     finally:
         if browser is not None:

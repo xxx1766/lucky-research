@@ -21,6 +21,8 @@ from collections import OrderedDict
 from pathlib import Path
 
 from research_assistant.ideas import (
+    brainstorm,
+    contrarian,
     evaluate,
     knowledge,
     registry,
@@ -75,8 +77,10 @@ def build_vertical_lineage(seed_paper_id: str, summary_paths: list[Path]) -> lis
 
 
 __all__ = [
+    "brainstorm",
     "build_horizontal_matrix",
     "build_vertical_lineage",
+    "contrarian",
     "evaluate",
     "knowledge",
     "registry",

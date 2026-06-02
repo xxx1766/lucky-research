@@ -20,9 +20,26 @@ from pathlib import Path
 from research_assistant.pseudocode.schema import PseudocodePackage
 
 _DEFAULT_TIMEOUT_SEC = 90
+_LOG_TAIL_CHARS = 800
 
 # Compilation engines tried in order. tectonic is preferred (matches /paper render).
 _ENGINES_DEFAULT: tuple[str, ...] = ("tectonic", "xelatex", "pdflatex")
+
+
+def _tail(log: str) -> str:
+    """Last `_LOG_TAIL_CHARS` of ``log`` with a leading truncation marker.
+
+    The marker lets users know more context is upstream — many LaTeX errors
+    quote the offending line ~1-2KB above the final "Fatal error" line, and a
+    silent truncation reads as "the engine said nothing useful".
+    """
+    if len(log) <= _LOG_TAIL_CHARS:
+        return log
+    return (
+        f"(... truncated {len(log) - _LOG_TAIL_CHARS} chars of LaTeX log; "
+        f"showing last {_LOG_TAIL_CHARS} ...)\n"
+        f"{log[-_LOG_TAIL_CHARS:]}"
+    )
 
 _PREAMBLE_BY_PACKAGE: dict[PseudocodePackage, str] = {
     "algpseudocode": (
@@ -45,7 +62,8 @@ class CompileResult:
     success: bool
     engine: str | None        # which engine actually produced the PDF (None on failure)
     pdf_path: Path | None
-    log_tail: str             # last ~800 chars of stdout+stderr for diagnostics
+    log_tail: str             # last ~800 chars of stdout+stderr, with a truncation marker
+                              # prepended when more context exists upstream
 
 
 def _wrap_standalone(snippet: str, package: PseudocodePackage) -> str:
@@ -116,14 +134,14 @@ def compile_snippet(
                     success=True,
                     engine=eng,
                     pdf_path=final_pdf,
-                    log_tail=last_log[-800:],
+                    log_tail=_tail(last_log),
                 )
 
     return CompileResult(
         success=False,
         engine=None,
         pdf_path=None,
-        log_tail=last_log[-800:] if last_log else "no LaTeX engine on PATH (tried: " + ", ".join(engines) + ")",
+        log_tail=_tail(last_log) if last_log else "no LaTeX engine on PATH (tried: " + ", ".join(engines) + ")",
     )
 
 

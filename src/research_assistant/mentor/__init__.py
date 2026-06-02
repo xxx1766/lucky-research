@@ -128,6 +128,7 @@ def stale_experiments(
     # ``research_assistant.experiments`` doesn't import mentor, but we want
     # mentor's other helpers (diff_goals, template) to be importable without
     # paying the experiments-package import cost.
+    from pydantic import ValidationError
     from research_assistant.experiments import (
         EXPERIMENTS_DIR,
         list_experiments,
@@ -143,7 +144,7 @@ def stale_experiments(
     for manifest in list_experiments():
         try:
             exp = parse_experiment(manifest)
-        except Exception:
+        except (ValidationError, ValueError, OSError):
             continue
         if exp.status not in _STALE_INCLUDED_STATUSES:
             continue

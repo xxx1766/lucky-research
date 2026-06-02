@@ -32,7 +32,7 @@ each line into ``memory_store(**payload)``.
 """
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 
@@ -192,7 +192,7 @@ def _research_notes_payloads() -> Iterator[dict]:
 # Order matters: smaller namespaces first so a summary count is easier to scan.
 # Each emitter swallows its own per-file errors, so a corrupt entry in one
 # namespace can't poison reindex for the rest.
-_EMITTERS: list[tuple[str, callable]] = [
+_EMITTERS: list[tuple[str, Callable[[], Iterator[dict]]]] = [
     ("project/past-work", _past_work_payloads),
     ("project/boss", _boss_payloads),
     ("project/experiments", _experiment_payloads),

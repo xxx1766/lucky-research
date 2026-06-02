@@ -185,7 +185,7 @@ def mirror_results(
     if not src.exists():
         raise FileNotFoundError(f"mirror source does not exist: {src}")
     dest_dir = result_path(slug, version)
-    dest_dir.parent.mkdir(parents=True, exist_ok=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
     if src.is_file():
         size = src.stat().st_size
         if size > _exp._LARGE_RESULT_BYTES and not force:
@@ -193,7 +193,6 @@ def mirror_results(
                 f"result file is {size / 1024 / 1024:.1f} MB (> 100 MB); "
                 "pass force=True to mirror anyway"
             )
-        dest_dir.mkdir(parents=True, exist_ok=True)
         dest_file = dest_dir / src.name
         if dest_file.exists() and not force:
             raise FileExistsError(f"mirror destination exists: {dest_file}")

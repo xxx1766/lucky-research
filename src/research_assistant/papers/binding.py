@@ -19,6 +19,7 @@ Mirrors conventions from `research_assistant.experiments`:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -51,9 +52,7 @@ _FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
 _GITIGNORE_LINES: tuple[str, ...] = ("algorithms/*.pdf", "status.md")
 
 # Sync helpers (verb constants, git wrappers, sync() itself) live in `_sync.py`
-# to keep this file under the 500-line limit. Re-exported here so callers can
-# keep using ``binding.sync`` / ``binding._infer_verb`` / ``binding._VERB_*``
-# unchanged.
+# to keep this file under the 500-line limit; re-exported so ``binding.sync`` etc. work unchanged.
 from research_assistant.papers._sync import (  # noqa: E402, F401
     _GIT_PUSH_TIMEOUT_S,
     _GIT_TIMEOUT_S,
@@ -148,7 +147,7 @@ def _local_symlink_target(symlink_path: Path) -> Path | None:
     """
     if not symlink_path.is_symlink():
         return None
-    raw = Path(__import__("os").readlink(symlink_path))
+    raw = Path(os.readlink(symlink_path))
     if raw.is_absolute():
         return raw
     return (symlink_path.parent / raw).resolve()
@@ -498,6 +497,3 @@ def restore(
                     migrated_bytes=0,
                 ))
     return out
-
-
-# `sync` + git helpers are imported above from `_sync.py`.

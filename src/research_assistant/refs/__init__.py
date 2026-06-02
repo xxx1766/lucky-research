@@ -82,7 +82,10 @@ def merge_bibtex(sources: list[Path], dest: Path) -> int:
 
 def _entry_fingerprint(entry: dict) -> str:
     """Build dedup key in priority order: DOI > title+author > entry key."""
-    doi = (entry.get("doi") or "").strip().lower()
+    # Strip BibTeX braces before normalizing — CrossRef emits `doi = {10.1145/x}`
+    # while doi.org content-negotiation emits the bare value; without this the
+    # two forms produce different fingerprints and dedup silently misses them.
+    doi = (entry.get("doi") or "").replace("{", "").replace("}", "").strip().lower()
     if doi:
         for prefix in ("https://doi.org/", "http://doi.org/", "doi.org/", "doi:"):
             if doi.startswith(prefix):

@@ -195,7 +195,7 @@ def _venue_refs_suffix(venue: str) -> str:
     try:
         from research_assistant.papers.venue_refs import venue_refs_summary
         summary = venue_refs_summary(venue)
-    except Exception:
+    except (ImportError, OSError):
         return ""
     if summary is None or summary.count == 0:
         return ""

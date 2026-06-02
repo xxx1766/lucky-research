@@ -89,6 +89,29 @@ def test_merge_bibtex_normalizes_doi_prefixes(tmp_path):
     assert written == 1
 
 
+def test_merge_bibtex_dedupes_braced_vs_bare_doi(tmp_path):
+    """CrossRef emits ``doi = {10.1/x}``; doi.org content-negotiation emits the
+    bare value. The two forms must fingerprint to the same DOI key."""
+    src_a = tmp_path / "a.bib"
+    src_b = tmp_path / "b.bib"
+    # bibtexparser would normally drop the outer braces, so force the brace-
+    # delimited form by writing the raw bib text directly with `{{...}}`.
+    src_a.write_text(
+        "@article{p,\n"
+        "  title = {X},\n"
+        "  doi = {{10.1/braced}},\n"
+        "  author = {P, P},\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    _write(src_b, _entry("q", title="Y", doi="10.1/braced", author="Q, Q"))
+    dest = tmp_path / "out.bib"
+
+    written = merge_bibtex([src_a, src_b], dest)
+
+    assert written == 1
+
+
 def test_merge_bibtex_output_is_sorted(tmp_path):
     src = tmp_path / "src.bib"
     _write(

@@ -217,9 +217,15 @@ def _heuristic_extract_host_and_gpus(text: str) -> tuple[str | None, list[GPUInf
 
     Same heuristic-grade approach :func:`stage_status` uses for ``url:`` and
     ``papers:`` — robust to the frontmatter shape :func:`register_version`
-    writes today, may miss hand-edited files with unusual indentation. The
-    interactive fallback in ``/experiment feasibility`` covers gaps.
+    writes today, may miss hand-edited files with unusual indentation.
+
+    A frontmatter that opens with ``---`` but yields neither hostname nor any
+    GPU rows is logged via :mod:`warnings` (``UserWarning``) so the
+    ``/experiment feasibility`` interactive fallback knows there was data the
+    heuristic skipped, rather than data the user genuinely omitted.
     """
+    import warnings
+
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None, []
@@ -262,6 +268,16 @@ def _heuristic_extract_host_and_gpus(text: str) -> tuple[str | None, list[GPUInf
                         current_gpu["driver"] = val
     if current_gpu:
         gpus.append(GPUInfo(**current_gpu))
+    if hostname is None and not gpus and any(
+        line.lstrip().startswith(("host:", "gpu:")) for line in lines[1:]
+    ):
+        warnings.warn(
+            "fleet frontmatter had host:/gpu: keys but the heuristic extracted "
+            "nothing — check indentation; "
+            "/experiment feasibility will fall back to interactive capture.",
+            UserWarning,
+            stacklevel=2,
+        )
     return hostname, gpus
 
 

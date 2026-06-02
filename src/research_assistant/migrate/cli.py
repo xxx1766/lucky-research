@@ -52,15 +52,15 @@ def _resolve_passphrase(
 ) -> bytes | None:
     """Decide which passphrase (if any) to use for the archive.
 
-    Three call shapes:
+    Precedence (env_var wins over encrypt):
 
-    * ``encrypt=False, env_var=None`` → no passphrase, unencrypted flow.
-    * ``env_var=<NAME>`` → read from ``os.environ`` (non-interactive). Empty
-      env var or unset is an error so CI scripts fail loudly instead of
-      silently producing a plaintext archive.
-    * ``encrypt=True`` (interactive) → prompt with ``getpass`` so the
-      passphrase never lands in shell history; ``confirm=True`` requires
-      the same value twice (for export; import only takes it once).
+    1. ``env_var`` set → read from ``os.environ[env_var]``. ``encrypt`` is
+       ignored. Empty / unset env var is a hard error so CI scripts fail
+       loudly instead of silently producing a plaintext archive.
+    2. ``env_var`` unset, ``encrypt=True`` → prompt with ``getpass`` so the
+       passphrase never lands in shell history; ``confirm=True`` asks twice
+       (used by export; import only asks once).
+    3. ``env_var`` unset, ``encrypt=False`` → return ``None`` (unencrypted).
     """
     if env_var:
         val = os.environ.get(env_var, "")
