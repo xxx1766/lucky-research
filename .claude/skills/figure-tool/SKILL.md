@@ -114,6 +114,14 @@ For **kind=structural**:
      in one general direction (left-to-right or top-to-bottom), prefer visual
      encodings over text labels for repeated information, figure text size
      between body and caption (typically 7–8 pt in two-column).
+   - **Architecture-diagram style** (from `references/architecture-diagram-prompt.md`):
+     flat-vector aesthetic in the DeepMind / OpenAI mold — pure-white
+     background, soft palette, simple icons, English-only text labels, no
+     long sentences inside boxes, no 3D shadows / sketch lines / photo-realism.
+     This prelude carries the visual-style guidance adapted from the
+     [awesome-ai-research-writing](https://github.com/Leey21/awesome-ai-research-writing)
+     "论文架构图" entry; reproduce the Visual Constraints block verbatim
+     when constructing the prompt.
    - **Hard rules** for any text inside the SVG (labels, legends,
      annotations): no `;` as punctuation, no `---` or `--` as prose
      punctuation. Restructure with commas or split labels.

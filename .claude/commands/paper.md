@@ -41,6 +41,20 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
   (LaTeX `.tex`). Auto-renders `main.pdf` at the end of each section write.
 - `/paper render` — re-render `main.pdf` from the current direction without writing
   anything new. Useful after manual `.tex` edits or to retry a failed build.
+- `/paper humanize [<section>] [--dry-run]` — post-draft pass that strips AI-tone
+  from `sections/*.tex` using the "去 AI 味" prompt adapted from
+  awesome-ai-research-writing. Default operates on every section; pass a section
+  name (synonyms resolved) to scope it. `--dry-run` writes
+  `sections/<name>.humanized.tex` instead of overwriting. Files the model judges
+  already natural (Part 3 = `[检测通过]`) are skipped. Auto-renders `main.pdf` at
+  the end. Audit log lands in `<direction>/reviews/humanize-<YYYY-MM-DD>.md`.
+- `/paper review [--target <venue-slug>]` — reviewer-perspective audit of the
+  rendered `main.pdf` (typeset output, not raw `.tex`). Adapted from the
+  awesome-ai-research-writing "Reviewer 视角" prompt. Produces a two-part report
+  (review opinion + strategic advice) under
+  `<direction>/reviews/review-<YYYY-MM-DD>.md`. Use before submission, rebuttal,
+  or advisor sync. `--target` overrides the venue used in the prompt (default =
+  current cursor venue).
 - `/paper status [<venue>/<direction>] [--all]` — print the progress board for the
   current direction (also persisted to `<direction>/status.md`). Pass an explicit
   `<venue>/<direction>` to target a specific folder and adopt it as the new cursor

@@ -322,19 +322,55 @@ These subcommands compose with `/migrate export`: registering artifacts
 once via `/experiment artifacts scan` means future `/migrate export` calls
 silently exclude them and embed the fetch commands in the archive manifest.
 
-## Stage 7 — `/experiment analyze`
+## Stage 7 — `/experiment analyze [<vN.M>...]`
+
+Turn the mirrored result files into a **LaTeX analysis paragraph** that
+`/paper write results` can drop straight into the prose. The prompt comes
+from `references/analyze-prompt.md` — adapted from the
+[awesome-ai-research-writing](https://github.com/Leey21/awesome-ai-research-writing)
+"实验分析" entry.
 
 **Inputs**
-- Current `slug`; mirrored result files under `results/<vN.M>/`.
-- Optional positional list of versions to compare; default = all.
+- Current `slug` from the cursor; mirrored result files under `results/<vN.M>/`.
+- Optional positional list of versions to compare (e.g. `v1.0 v1.1 v2.0`);
+  default = all versions present under `versions/`.
 
 **Workflow**
-1. Read each version's mirrored result file (`results/<vN.M>/*`); also read
-   `design.md` for the metric definitions.
-2. LLM renders a cross-version comparison: how metrics moved, where the variance
-   comes from, what next version should try.
-3. Optionally write `analysis.md` (plain-text Y/N — user opts in; not auto).
-4. Print the footer.
+1. Resolve the version list (positional args or all under `versions/`). Reject
+   with a hint if `results/<vN.M>/` is empty for the requested versions —
+   nothing to analyze.
+2. **Read** the inputs:
+   - Each version's mirrored result files under `results/<vN.M>/` (verbatim;
+     don't pre-summarize — the prompt forbids hallucinated numbers and the
+     model must see the raw rows to follow the "数据真实性" rule).
+   - `latest_design_path(slug)` — for metric definitions, RQ, success criteria.
+   - `references.md` if present — baseline numbers from comparison papers,
+     which is what lets the model frame the SOTA comparison concretely.
+3. **Load** the analyze prompt prelude from `references/analyze-prompt.md`.
+4. **Stitch** the result rows + design context as the `# Input` block — free
+   text, no pre-processing. Paste numbers verbatim.
+5. **Apply** the prompt and parse the two-part response:
+   - `Part 1 [LaTeX]` — one or more `\paragraph{Title Case Conclusion}` blocks
+     with the analysis prose. No `\textbf` / `\emph` (prompt forbids them).
+   - `Part 2 [Translation]` — Chinese direct translation for spot-checking.
+6. **Write** outputs under the **latest** analyzed version's directory:
+   - `results/<latest>/analysis.tex` — Part 1 verbatim. Consumed by
+     `/paper write results`.
+   - `results/<latest>/analysis.md` — full Part 1 + Part 2 as the audit log
+     (so the user can verify the model didn't fabricate any number).
+7. Refresh `_index.md`. Print a one-line summary
+   ("analyzed N versions → results/<latest>/analysis.tex") + the footer.
+
+**Output files**
+- `outputs/experiments/<slug>/results/<latest>/analysis.tex`
+- `outputs/experiments/<slug>/results/<latest>/analysis.md`
+
+**Cross-skill integration.** `/paper write results` reads
+`results/<latest>/analysis.tex` directly when the current paper is bound to
+this experiment (via `expert.md` `experiment:` frontmatter or
+`experiments:`). The `.tex` is meant to be self-contained — paste it under
+`\section{Results}` and it compiles, with no `\textbf` to strip and the
+`\paragraph{}` titles already in Title Case.
 
 ## Stage 8 — `/experiment status` / `/experiment list` / `/experiment show`
 

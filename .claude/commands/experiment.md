@@ -57,8 +57,13 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
 - `/experiment artifacts scan [--threshold <bytes>]` — walk the experiment
   dir for ≥threshold files (default 1 GiB) not already registered and
   interactively prompt the user about each one.
-- `/experiment analyze [<vN.M>...]` — cross-version comparison from the mirrored
-  `results/` directories. Optionally writes `analysis.md` (user opts in).
+- `/experiment analyze [<vN.M>...]` — turn the mirrored `results/<vN.M>/` files
+  into a self-contained LaTeX analysis paragraph using the "实验分析" prompt
+  adapted from awesome-ai-research-writing. Writes
+  `results/<latest>/analysis.tex` (one or more `\paragraph{Title Case Conclusion}`
+  blocks, no `\textbf`/`\emph`) + `results/<latest>/analysis.md` (full response
+  with Chinese translation for spot-checking). `/paper write results` consumes
+  the `.tex` directly when the paper is bound to this experiment.
 - `/experiment status [<slug>]` — board for the current/given experiment, persisted
   to `<slug>/status.md`. Adopts `<slug>` as the cursor if given.
 - `/experiment list` — refresh + print `outputs/experiments/_index.md`.

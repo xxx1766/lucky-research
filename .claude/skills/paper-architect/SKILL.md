@@ -16,6 +16,7 @@ stages assume earlier ones are non-empty.
 ```
 venue → direction → scout → focus → motivate → write ↔ experiments
                                                  │
+                                                 ├─ humanize · review (post-write polish + audit)
                                                  ├─ status snapshot any time
                                                  └─ render any time (auto after write)
 ```
@@ -618,6 +619,108 @@ after a build failure.
 4. On success: print the absolute path to `main.pdf`. On failure: surface the tail
    of the log so the user can fix the source.
 5. Print `render_progress_footer(venue, direction, stage_status(direction_dir))`.
+
+## Stage 8.5 — `/paper humanize [<section>] [--dry-run]`
+
+Post-draft pass that strips AI-tone from the prose in `sections/*.tex`. The
+prompt comes from `references/humanize-prompt.md` — adapted from the
+[awesome-ai-research-writing](https://github.com/Leey21/awesome-ai-research-writing)
+"去 AI 味（LaTeX 英文）" entry.
+
+**Inputs**
+- Current `(venue, direction)` from `project/paper-context.current`. Reject if
+  unset.
+- Optional positional `<section>` — process only `sections/<name>.tex`. Section
+  synonyms resolve via the same map used by `/paper write` (e.g. `eval` →
+  `results`). Default = every `sections/*.tex` in the direction.
+- `--dry-run` flag — write to `sections/<name>.humanized.tex` instead of
+  overwriting; the user diffs and chooses what to keep.
+
+**Workflow**
+1. Resolve cursor → `(venue, direction)`. Verify
+   `outputs/papers/<venue>/<direction>/sections/` exists; if empty, point the
+   user at `/paper write` and stop.
+2. Resolve the target file list. For each file:
+   - **Read** the body of `sections/<name>.tex`.
+   - **Load** the humanize prompt prelude from
+     `references/humanize-prompt.md` (verbatim).
+   - **Apply** the prompt with the file body as the `# Input` block.
+   - **Parse** the three-part response (`Part 1 [LaTeX]`,
+     `Part 2 [Translation]`, `Part 3 [Modification Log]`).
+3. **Skip-on-sentinel.** If Part 3 starts with the literal prefix
+   `[检测通过]`, the model judged the prose already natural — do NOT rewrite
+   the file. Record a `skipped: true` row in the audit log.
+4. **Rewrite** (unless `--dry-run`):
+   - default: overwrite `sections/<name>.tex` with Part 1.
+   - `--dry-run`: write `sections/<name>.humanized.tex` and leave the original
+     untouched.
+5. **Audit log.** Append a section to
+   `<direction>/reviews/humanize-<YYYY-MM-DD>.md` per file, capturing
+   `section`, `skipped?`, the Modification Log, and the Chinese translation.
+   Same-day reruns get `-2`, `-3`, … suffix (collision-safe).
+6. **Auto-render.** After all files are processed (and at least one was
+   rewritten), trigger the same render path as `/paper render`. Skip when
+   `--dry-run` because the live `.tex` files are unchanged.
+7. Print a one-line summary table (`section · status · log path`) followed by
+   `render_progress_footer(venue, direction, stage_status(direction_dir))`.
+
+**Output files**
+- `outputs/papers/<v>/<d>/sections/<name>.tex` — rewritten (or untouched if
+  skipped or dry-run).
+- `outputs/papers/<v>/<d>/sections/<name>.humanized.tex` — dry-run only.
+- `outputs/papers/<v>/<d>/reviews/humanize-<YYYY-MM-DD>.md` — audit log.
+
+**Memory keys touched** — none. This is purely file-level.
+
+## Stage 8.6 — `/paper review [--target <venue-slug>]`
+
+Reviewer-perspective audit of the **rendered PDF** for the current paper.
+Used before submission / rebuttal / advisor sync. The prompt comes from
+`references/review-prompt.md` — adapted from the
+[awesome-ai-research-writing](https://github.com/Leey21/awesome-ai-research-writing)
+"论文整体以 Reviewer 视角进行审视" entry.
+
+**Inputs**
+- Current `(venue, direction)` from cursor. Reject if unset.
+- The direction's `main.pdf`. If absent, point the user at `/paper render`
+  first and stop — reviewers see typeset output, not raw `.tex`, so the audit
+  must mirror that.
+- Optional `--target <venue-slug>` — overrides the target venue used in the
+  prompt's `# Input` substitution. Default = cursor venue.
+
+**Workflow**
+1. Resolve cursor → `(venue, direction)`. Verify `main.pdf` exists; if not,
+   suggest `/paper render` and stop.
+2. **Load** the review prompt prelude from `references/review-prompt.md`.
+3. **Read the PDF** via the multimodal `Read` tool —
+   `Read(main_pdf_abs_path, pages="1-N")` — so figures, tables, and layout are
+   visible. Choose `pages="1-12"` for typical conference papers; expand if
+   the page count exceeds 12 (read in 12-page windows until done).
+4. **Substitute** the literal token `{{TARGET_VENUE}}` in the prompt with the
+   resolved target venue slug (e.g. `ICML 2026`). The substitution happens in
+   code; the model never sees the placeholder.
+5. **Apply** the prompt and parse the two-part response (`Part 1 [The Review
+   Report]` and `Part 2 [Strategic Advice]`).
+6. **Write** the full response to
+   `<direction>/reviews/review-<YYYY-MM-DD>.md` with YAML frontmatter:
+
+   ```yaml
+   ---
+   date: 2026-06-02
+   target_venue: ICML 2026
+   reviewer: claude-sim
+   ---
+   ```
+
+   Collision-safe — same-day reruns append `-2`, `-3`, … to the filename.
+7. **Surface** to the user: the Rating line from Part 1 + the first
+   action-item bullet from Part 2's `行动指南` block. Then
+   `render_progress_footer(venue, direction, stage_status(direction_dir))`.
+
+**Output files**
+- `outputs/papers/<v>/<d>/reviews/review-<YYYY-MM-DD>.md`
+
+**Memory keys touched** — none. This is purely a write-to-disk audit.
 
 ## Stage 9 — `/paper archive [<venue>/<direction>] [--abandoned]`
 
