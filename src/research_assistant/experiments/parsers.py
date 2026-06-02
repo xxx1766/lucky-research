@@ -100,19 +100,19 @@ def parse_fleet(path: Path) -> FleetSnapshot:
 def parse_feasibility(path: Path) -> FeasibilityReport:
     """Parse a ``feasibility-<date>.md`` file into a :class:`FeasibilityReport`.
 
-    Falls back to the filename's date portion (``feasibility-YYYY-MM-DD``) when
-    the frontmatter omits ``date``.
+    Falls back to the filename's date portion (``feasibility-YYYY-MM-DD``,
+    optionally suffixed ``-2``/``-3``/... when :func:`feasibility_path`
+    collided) when the frontmatter omits ``date``.
     """
     from research_assistant.common.frontmatter import parse as parse_fm
 
+    from .paths import _parse_feasibility_filename
+
     data, body = parse_fm(path)
     if "date" not in data:
-        stem = Path(path).stem
-        if stem.startswith("feasibility-"):
-            try:
-                data["date"] = date.fromisoformat(stem[len("feasibility-"):])
-            except ValueError:
-                pass
+        parsed = _parse_feasibility_filename(Path(path).name)
+        if parsed is not None:
+            data["date"] = parsed[0]
     data.setdefault("body", body)
     return FeasibilityReport.model_validate(data)
 

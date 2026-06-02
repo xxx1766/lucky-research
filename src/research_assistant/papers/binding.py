@@ -206,10 +206,11 @@ def read_binding_from_expert_md(venue: str, direction: str) -> str | None:
 def read_all_bindings_from_expert_md(venue: str, direction: str) -> list[str]:
     """Return every experiment slug bound to this direction, dedup'd.
 
-    Unions the singular ``experiment:`` field with the optional plural
-    ``experiments:`` list (set by ``/paper bind --additional`` and the
-    paper-architect Stage 0 binding prompt). Order: primary first, then
-    additionals in their original order; duplicates collapsed.
+    Unions the singular ``experiment:`` field (written by :func:`bind`) with
+    the optional plural ``experiments:`` list (populated by the
+    paper-architect Stage 0 binding prompt as a direct frontmatter edit —
+    there is no CLI flag for additional bindings today). Order: primary
+    first, then additionals in their original order; duplicates collapsed.
 
     Returns ``[]`` if expert.md is missing or has no bindings.
     """

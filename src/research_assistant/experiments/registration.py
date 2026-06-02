@@ -8,6 +8,7 @@ via the parent package so tests can monkeypatch those on ``experiments``.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -128,6 +129,8 @@ def register_version(
     seeds: list[int] | None = None,
     metrics: dict[str, float] | None = None,
     notes: str = "",
+    started_at: str | None = None,
+    finished_at: str | None = None,
     force: bool = False,
 ) -> Path:
     """Compose and write ``versions/<vN.M>.md`` for ``slug``.
@@ -136,6 +139,12 @@ def register_version(
     suggested next version in the exception message. ``next_version`` is the
     canonical suggestion source; this function accepts any well-formed
     ``vN.M`` so callers can deliberately skip numbers (e.g. ``v1.3`` -> ``v3.0``).
+
+    ``started_at`` / ``finished_at`` are ISO-8601 strings the caller may pass
+    when the run-time is known (e.g. CI captures both). When ``finished_at``
+    is omitted the registration moment is used as a best-effort proxy — the
+    ``Version`` model exposes both fields as ``datetime | None`` and a
+    silently-None ``finished_at`` reads as "no timing data was ever known".
     """
     parse_semver(version)
     if kind not in ("major", "minor"):
@@ -180,8 +189,8 @@ def register_version(
         "mirrored_to": (
             str(mirrored.relative_to(experiment_path(slug))) if mirrored else None
         ),
-        "started_at": None,
-        "finished_at": None,
+        "started_at": started_at,
+        "finished_at": finished_at or datetime.now().astimezone().isoformat(timespec="seconds"),
         "host": {
             "hostname": env.get("hostname"),
             "os": env.get("os"),

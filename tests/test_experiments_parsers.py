@@ -219,6 +219,23 @@ def test_parse_feasibility_date_falls_back_to_filename(tmp_path):
     assert r.date == date(2026, 5, 12)
 
 
+def test_parse_feasibility_handles_collision_suffix(tmp_path):
+    """feasibility_path emits feasibility-<date>-2.md on collision; the parser
+    must recover the date from the suffixed form too, otherwise the second
+    run of the day is unreadable."""
+    p = tmp_path / "feasibility-2026-05-12-2.md"
+    p.write_text(
+        "---\n"
+        "slug: x\n"
+        "design_version: d1.0\n"
+        "verdict: feasible\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    r = parse_feasibility(p)
+    assert r.date == date(2026, 5, 12)
+
+
 # ---------- parse_design ----------
 
 
