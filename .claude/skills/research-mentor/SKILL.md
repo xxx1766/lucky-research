@@ -101,7 +101,7 @@ not a 20-minute timer.
 - `project/research-notes/<slug>` — write (on `init` and `sync`)
 - `papers/*`, `ideas/*`, `drafts/*` — read (recent-activity signal)
 
-## Open TODOs before this skill is real
+## Open enhancements
 
 - [ ] Decide check-in cadence (default: every 7 days, configurable).
 - [ ] Decide what counts as "activity" — file mtimes? AgentDB write timestamps?

@@ -37,7 +37,7 @@ description: Summarize research papers (PDF or arXiv) into structured markdown (
 - `papers/<slug>` — write
 - `papers/*` — read (to avoid re-summarizing what's already indexed)
 
-## Open TODOs before this skill is real
+## Open enhancements
 
 - [ ] Decide the slug format (arxiv id? doi? title hash?).
 - [ ] Decide whether to call GROBID for higher-quality structural parsing.

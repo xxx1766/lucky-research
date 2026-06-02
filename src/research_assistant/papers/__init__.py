@@ -256,15 +256,23 @@ def render_progress_board(venue: str, direction: str, status: StageStatus) -> st
 def current_context() -> tuple[str | None, str | None]:
     """Read project/paper-context from AgentDB.
 
-    Returns (venue_slug, direction_slug). Not implemented in Python — the skill
-    reads AgentDB via MCP and passes values explicitly to other helpers.
+    By-design Python stub: the cursor lives in AgentDB and the skill reads it
+    via MCP (`mcp__claude-flow__memory_retrieve`) before calling other helpers.
+    No Python caller should hit this; the function exists only to anchor the
+    docstring contract for skill authors.
     """
-    raise NotImplementedError("AgentDB context read pending real skill body")
+    raise RuntimeError(
+        "current_context is intentionally Python-stubbed — skills must call "
+        "mcp__claude-flow__memory_retrieve(namespace='project', key='paper-context.current')"
+    )
 
 
 def set_context(venue: str, direction: str | None) -> None:
-    """Write project/paper-context to AgentDB. See `current_context`."""
-    raise NotImplementedError("AgentDB context write pending real skill body")
+    """Write project/paper-context to AgentDB. See `current_context` for rationale."""
+    raise RuntimeError(
+        "set_context is intentionally Python-stubbed — skills must call "
+        "mcp__claude-flow__memory_store(namespace='project', key='paper-context.current')"
+    )
 
 
 # ---------- binding re-exports ----------

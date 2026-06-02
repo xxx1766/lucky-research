@@ -113,8 +113,6 @@ impact, Notes for future-me.
 
 ## Open TODOs
 
-- [ ] Real YAML frontmatter parser (`parse_entry`) — likely `python-frontmatter`.
-- [ ] Real AgentDB upsert (`to_agentdb_payload` + sync driver).
 - [ ] Decide ranking when many hits (semantic score vs. recency).
 - [ ] Add a `last-touched` signal so stale entries decay in ranking.
 - [ ] Optional: index the cloned `repo/` for repo-grep recall during `/paper direction` and `/idea-check`.

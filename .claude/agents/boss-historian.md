@@ -154,11 +154,6 @@ Triggered by `/boss sync`.
 3. Upsert each into AgentDB under `project/boss/profile` and
    `project/boss/meetings/<date>` via `mcp__claude-flow__memory_store`.
 
-> **Today's reality**: `parse_profile` / `parse_meeting` raise `NotImplementedError`.
-> `/boss sync` should detect this and print the same "indexing pending" message as
-> `/past-work sync` does — not crash. Promotion to real indexing lands in the same PR
-> that lands real `parse_entry` for past-work.
-
 ## Schemas (YAML frontmatter)
 
 ### profile.md
@@ -196,9 +191,6 @@ Body sections (free markdown): **What I reported**, **His feedback**, **Action i
 
 ## Open TODOs
 
-- [ ] Real YAML frontmatter parser (`parse_profile`, `parse_meeting`) — land alongside
-      `parse_entry` for past-work.
-- [ ] Real AgentDB upsert (`to_agentdb_payload` + sync driver).
 - [ ] Promote rehearsals into a `BossRehearsal` Pydantic model + AgentDB indexing
       under `project/boss/rehearsals/<date>-<slug>` once the frontmatter parser lands.
       Today they're disk-only artifacts.

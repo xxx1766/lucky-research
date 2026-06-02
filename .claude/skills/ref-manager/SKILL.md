@@ -53,7 +53,7 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 - `papers/<slug>` — read (bibinfo lookup)
 - `drafts/<paper-slug>` — read (citation resolution)
 
-## Open TODOs before this skill is real
+## Open enhancements
 
 - [ ] Decide BibTeX citation-key convention (`firstauthorYYYYkeyword`).
 - [ ] Decide CSL/style preference (chicago / ieee / acm / neurips).
