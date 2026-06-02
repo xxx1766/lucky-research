@@ -101,6 +101,43 @@ def test_collision_writes_sidecar_with_timestamp(tmp_path, monkeypatch):
     assert sidecar.read_bytes() == b"source-machine bytes"
 
 
+def test_dry_run_collision_emits_checksum_warn_on_mismatch(tmp_path, monkeypatch):
+    """Dry-run on a collided file previously could never trip checksum-warn
+    (the synthesized "extracted" sha was set equal to expected). Now it reads
+    the real archive bytes and compares, so a tampered manifest surfaces the
+    warning during /migrate import --dry-run."""
+    src = tmp_path / "src"
+    (src / "inputs" / "papers").mkdir(parents=True)
+    pdf = src / "inputs" / "papers" / "x.pdf"
+    pdf.write_bytes(b"genuine-source-bytes")
+
+    archive_path = tmp_path / "out.zip"
+    _build_archive(
+        src, [FileItem(pdf, "inputs/papers/x.pdf", pdf.stat().st_size)],
+        archive_path, monkeypatch,
+    )
+
+    # Forge the manifest's expected_sha256 so the in-zip bytes won't match.
+    with open_archive(archive_path) as zf:
+        manifest = read_manifest(zf)
+        entries = list(iter_entries(zf, manifest))
+        forged = entries[0]._replace(expected_sha256="0" * 64)
+
+        dest_repo = tmp_path / "dest"
+        (dest_repo / "inputs" / "papers").mkdir(parents=True)
+        (dest_repo / "inputs" / "papers" / "x.pdf").write_bytes(b"new machine local")
+        verdicts = merge_apply(
+            zf, [forged],
+            repo_root=dest_repo, dry_run=True,
+            now=datetime(2026, 5, 24, 14, 22, 1),
+        )
+    assert verdicts[0].verdict == "checksum-warn"
+    assert verdicts[0].note is not None and "sha256 mismatch" in verdicts[0].note
+    # Dry-run: dest file untouched and no sidecar materialized.
+    assert (dest_repo / "inputs" / "papers" / "x.pdf").read_bytes() == b"new machine local"
+    assert not (dest_repo / verdicts[0].sidecar_path).exists()
+
+
 def test_dry_run_does_not_write_files(tmp_path, monkeypatch):
     src = tmp_path / "src"
     src.mkdir()

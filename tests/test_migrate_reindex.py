@@ -14,6 +14,7 @@ from research_assistant import experiments as exp_pkg
 from research_assistant.ideas import registry as ideas_registry
 from research_assistant.mentor import boss_profile, past_work
 from research_assistant.migrate.reindex import (
+    cmd_reindex,
     count_by_namespace,
     iter_reindex_payloads,
 )
@@ -261,3 +262,72 @@ def test_count_by_namespace_aggregates_correctly(isolated_repo):
     counts = count_by_namespace()
     assert counts["project/past-work"] == 2
     assert counts["ideas"] == 1
+
+
+# ---------- cmd_reindex CLI handler ----------
+
+
+import argparse  # noqa: E402  (intentional: keep CLI tests adjacent)
+import json  # noqa: E402
+
+
+def _reindex_ns(*, summary: bool, namespace: str | None = None) -> argparse.Namespace:
+    return argparse.Namespace(summary=summary, namespace=namespace)
+
+
+def test_cmd_reindex_summary_on_empty_repo_reports_zero(isolated_repo, capsys):
+    rc = cmd_reindex(_reindex_ns(summary=True))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "(no reindexable payloads found)" in out
+
+
+def test_cmd_reindex_summary_groups_counts_by_namespace(isolated_repo, capsys):
+    _write_past_work(
+        isolated_repo["PAST_WORK_DIR"], "a", title="A", year=2026, status="published",
+    )
+    _write_past_work(
+        isolated_repo["PAST_WORK_DIR"], "b", title="B", year=2026, status="published",
+    )
+    _write_idea(isolated_repo["IDEA_CHECKS_DIR"], "c", statement="C.")
+
+    rc = cmd_reindex(_reindex_ns(summary=True))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "project/past-work" in out
+    assert "ideas" in out
+    # Total row + body — at minimum the past-work count "2" appears on its row.
+    assert "2" in out and "1" in out
+    assert "total" in out
+
+
+def test_cmd_reindex_default_mode_emits_one_json_per_payload(isolated_repo, capsys):
+    _write_past_work(
+        isolated_repo["PAST_WORK_DIR"], "a", title="A", year=2026, status="published",
+    )
+    _write_idea(isolated_repo["IDEA_CHECKS_DIR"], "b", statement="B.")
+
+    rc = cmd_reindex(_reindex_ns(summary=False))
+    out = capsys.readouterr().out
+    assert rc == 0
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(lines) == 2
+    payloads = [json.loads(ln) for ln in lines]
+    namespaces = {p["namespace"] for p in payloads}
+    assert namespaces == {"project/past-work", "ideas"}
+
+
+def test_cmd_reindex_namespace_filter_scopes_jsonl(isolated_repo, capsys):
+    _write_past_work(
+        isolated_repo["PAST_WORK_DIR"], "a", title="A", year=2026, status="published",
+    )
+    _write_idea(isolated_repo["IDEA_CHECKS_DIR"], "b", statement="B.")
+
+    rc = cmd_reindex(_reindex_ns(summary=False, namespace="ideas"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["namespace"] == "ideas"
+    assert payload["key"] == "b"
