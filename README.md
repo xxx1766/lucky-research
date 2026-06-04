@@ -13,14 +13,14 @@ track your trajectory over time, and migrate the whole workspace across machines
 | `/summarize`   | `lit-summarize`            | Summarize PDFs (`inputs/papers/*.pdf`) or arXiv URLs into structured markdown; index in AgentDB `papers/`. |
 | `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) plus two micro-flows (`brainstorm` at 1.5, `contrarian` at 2.5). Legacy `horizontal` / `vertical` modes still supported. |
 | `/scout-swarm` | `research-swarm` (optional)| Optional ruflo accelerator — parallelize `/paper scout` with a researcher swarm. Degrades to "use `/paper scout`" when swarm tools are absent. |
-| `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
+| `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → verify → status → archive`) under `outputs/papers/<venue>/<direction>/`. `verify` runs a 3-pass evidence-closure audit (Evidence → Argument → Style) and builds a typed debt ledger surfaced on the status board. |
 | `/cite`        | `ref-manager`              | Scan LaTeX `\cite{...}` keys and merge BibTeX into `<direction>/refs.bib`. |
 | `/convert`     | `ref-manager`              | Markdown ↔ LaTeX ↔ docx via pandoc. |
 | `/mentor`      | `research-mentor`          | Weekly check-in vs goals · per-project research-notes triplet (state / log / findings) · past-work + boss subroutes. |
 | `/past-work`   | `past-work-historian`      | Curate past projects under `inputs/past-work/<slug>.md`; bind/clone the source repo for `/paper direction` recall. |
 | `/boss`        | `boss-historian`           | Group-PI profile + per-meeting notes + pre-report rehearsals under `inputs/boss-profile/`. Alias for `/mentor boss …`. |
 | `/experiment`  | `experiment-runner`        | Bind each experiment to one GitHub repo (URL + branch + SHA), record semver versions (env · pip freeze · commit · result mirror), register external artifacts, run advisory feasibility, analyze results. |
-| `/figure`      | `figure-tool`              | Structural SVG (architecture / pipeline / concept) or matplotlib data plots, scoped to current paper or experiment. Plus a curated reference-figure library. |
+| `/figure`      | `figure-tool`              | Structural SVG (architecture / pipeline / concept) or matplotlib data plots, scoped to current paper or experiment. Read-only `/figure recommend` chart-type picker; a curated reference-figure library; evidence-first (never plot fabricated data, unconfirmed architecture nodes flagged `[VERIFY_ARCH]`) + a data-plot QA checklist (no rainbow colormaps, grayscale-safe, error-bar type stated). |
 | `/pseudocode`  | `pseudocode-tool`          | LaTeX algorithm pseudocode (`algorithm + algpseudocode`, or `algorithm2e`) with notation linting, scoped like `/figure`. |
 | `/migrate`     | `migrate-tool`             | Bundle per-user state (`inputs/`, `outputs/`, `ruvector.db`, `.swarm/memory.db`, `.claude`) into a zip; AES-encrypt optional; never overwrites on import. `reindex` rebuilds AgentDB from on-disk truth. |
 
@@ -71,7 +71,9 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 12. /paper write [section]          → outline.md (no section) OR sections/<section>.tex
                                        + auto-rendered main.pdf
 13. /cite                           → <direction>/refs.bib
-14. /paper humanize + review        → reviews/{humanize,review}-<date>.md
+14. /paper humanize + review + verify → reviews/{humanize,review,verify-*}-<date>.md
+                                       (verify computes a pass/fail/blocked verdict
+                                        from open hard debts; a 3-round cap)
 15. /paper archive                  → inputs/past-work/<slug>/paper/  (when done)
 16. /mentor                         → weekly check-in vs goals
 17. /migrate export                 → outputs/migrate/migrate-<host>-<ts>.zip
@@ -79,9 +81,32 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 ```
 
 > Every `/paper` subcommand ends with a one-line progress footer
-> (`── <venue> / <direction>  [######-] 6/7  next: /paper render ──`); run
+> (`── <venue> / <direction>  [######-] 6/7  ⚠ 2 debts  next: /paper render ──`); run
 > `/paper status` for the full multi-line board (also persisted to
-> `<direction>/status.md`).
+> `<direction>/status.md`). The `⚠ N debts` marker rolls up open evidence-first
+> placeholders + unresolved `\cite{}` keys; `/paper status` breaks them down by
+> class on a `debts:` line (citation / figure / evidence / consistency / prose).
+
+### Evidence-first discipline (the anti-fabrication spine)
+
+`/paper write`, `/paper verify`, and `/figure` share one rule: **never fabricate
+a citation, a number, a result, or an architecture edge.** When support is not
+yet on hand, the draft carries an explicit placeholder token
+(`[REF_NEEDED]` / `[FIGURE_NEEDED]` / `[DATA_NEEDED]` / `[CLAIM_UNVERIFIED]`;
+figures use `[VERIFY_ARCH]`) instead of an invented fact. Each gap is tracked as
+a **debt** that a later stage closes:
+
+- **`/paper write` is gated** — a preflight check blocks drafting until its
+  prerequisites exist (`_venue.md`, `focused-problem.md`; scouted literature for
+  intro/related-work), with a `--force` escape.
+- **`/paper verify`** runs three ordered passes (Evidence → Argument → Style,
+  no skipping), including a claim-strength audit that flags over-strong wording
+  (significant / robust / SOTA / …) lacking the evidence it implies. It writes a
+  typed `VerificationReport` whose verdict (`passed` / `failed` / `blocked`) is
+  computed from the open hard debts, with a 3-round cap.
+- **`/paper venue`** tags every requirement fact with provenance
+  (`(src: <url> @ <date>)` / `unverified` / `unknown`) so a guessed deadline can
+  never masquerade as confirmed.
 
 ## How the commands chain together
 
@@ -98,7 +123,8 @@ arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<
                                           /paper       (venue → direction → bind →
                                                         scout → focus → motivate →
                                                         write → render → humanize →
-                                                        review → status → archive)
+                                                        review → verify → status →
+                                                        archive)
                                                        │
                                                        │     ╔════════════════════╗
                                                        ├────▶║ /experiment        ║

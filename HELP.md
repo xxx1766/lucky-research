@@ -105,16 +105,19 @@ The biggest command surface. All paths are `outputs/papers/<venue>/<direction>/`
 | `/paper write [section]` | Draft `outline.md` or `sections/<section>.tex`; auto-renders `main.pdf`. |
 | `/paper render` | Re-render `main.pdf` only. |
 | `/paper humanize [<section>] [--dry-run]` | Strip AI-tone from `.tex`; saves audit to `reviews/`. |
-| `/paper review [--target <venue>]` | Reviewer-perspective audit of `main.pdf` → `reviews/`. |
-| `/paper status [<v>/<d>] [--all]` | Print + persist 7-stage progress board to `status.md`. |
+| `/paper review [--target <venue>]` | Reviewer-perspective audit of the rendered `main.pdf` → `reviews/review-<date>.md`. |
+| `/paper verify [<section>] [--round N]` | Source-level evidence-closure audit — 3 ordered passes (Evidence → Argument → Style), typed debt ledger (hard: citation/evidence/consistency/prose · soft: figure) + claim→evidence map + claim-strength audit; verdict (passed/failed/blocked, 3-round cap → unresolvable) computed from open hard debts → `reviews/verify-<section>-<date>.md`. Distinct from `review`: verify reads the `.tex` source + experiment outputs, `review` reads the typeset PDF. |
+| `/paper status [<v>/<d>] [--all]` | Print + persist the 7-stage progress board (+ a `debts:` sidebar — citation/figure/evidence/consistency/prose) to `status.md`. |
 | `/paper archive [<v>/<d>] [--abandoned]` | Move finished paper to `inputs/past-work/<slug>/paper/`. |
 | `/paper unarchive <slug>` | Reverse archive. |
 | `/paper archive list` | Table of archived papers. |
 
-- Per-direction artifacts: `expert.md, focused-problem.md, related-papers/, experiments/{motivation,benchmark}.md, outline.md, main.tex, sections/*.tex, refs.bib, main.pdf, status.md, reviews/`.
-- Helpers: `papers/{__init__, _sync, binding, archive, _archive_extract, venue_refs, venue_merge, venue_conventions, venue_family, related_experiments}.py`.
-- AgentDB: `papers/venue-style/<venue>/<paper>`, `drafts/<venue>/<direction>`, cursor `project/paper-context.current`, bindings `project/paper-bindings.<v>__<d>`.
+- Per-direction artifacts: `expert.md, focused-problem.md, related-papers/, experiments/{motivation,benchmark}.md, outline.md, main.tex, sections/*.tex, refs.bib, main.pdf, status.md, reviews/{humanize,review,verify}-*.md`.
+- Helpers: `papers/{__init__, _sync, binding, archive, _archive_extract, venue_refs, venue_merge, venue_conventions, venue_family, related_experiments, preflight, placeholders, verification, claim_strength}.py`.
+- AgentDB: `papers/venue-style/<venue>/<paper>`, `drafts/<venue>/<direction>` (outline snapshot written on `/paper write`, read by `/mentor`), cursor `project/paper-context.current`, bindings `project/paper-bindings.<v>__<d>`.
 - LaTeX render via `refs/__init__.py:render_latex` (tectonic → latexmk → xelatex → pdflatex).
+- **Evidence-first write** — `/paper write` runs a preflight gate (`write_preflight`: blocks on missing `_venue.md` / `focused-problem.md`, and on intro/related-work without scouted literature; `--force` overrides) and uses placeholder tokens (`[REF_NEEDED]` / `[FIGURE_NEEDED]` / `[DATA_NEEDED]` / `[CLAIM_UNVERIFIED]`) instead of fabricating; `scan_placeholders` + unresolved `\cite{}` roll up into the `debts:` board line.
+- **Venue provenance** — `/paper venue` tags each requirement fact in `_venue.md` with `(src: <url> @ <date>)` / `unverified` / `unknown`; deadlines are the highest-risk facts.
 
 ---
 
@@ -234,7 +237,7 @@ All paths under `outputs/experiments/<slug>/`. Cursor `project/experiment-contex
 | `/experiment index [--slug]` | Backfill AgentDB across versions. |
 
 - Helpers: `experiments/{paths, models, parsers, status, repo, registration, env_probe}.py`; `migrate/cli_artifacts.py` for `artifacts ...`.
-- AgentDB: cursor `project/experiment-context.current`, per-version payloads `experiments/<slug>/<vN.M>`.
+- AgentDB: cursor `project/experiment-context.current`; experiment manifests at namespace `project/experiments` (key `<slug>`); per-version payloads at namespace `project/experiments/<slug>/versions` (key `<vN.M>`).
 - Templates: `docs/experiment-{design,manifest,references,version}-template.md`.
 
 ---
@@ -262,6 +265,7 @@ Scoped to current `(venue, direction)` OR experiment slug. Helpers in `figures/`
 - Reference library: `inputs/figure-refs/<slug>/` + `figure-refs/_index.md`.
 - AgentDB `project/figure-refs/<slug>`.
 - Backends: structural SVG (or D2-scaffolded SVG) for architecture/pipeline/concept figures; matplotlib for data plots.
+- **Evidence-first** — never plot fabricated data (only user-provided / verified numbers); unconfirmed architecture nodes are flagged `[VERIFY_ARCH: …]` rather than invented. A data-plot QA checklist is applied before a figure is declared done: no rainbow/jet colormap, truncated axes marked, error-bar type stated (std / SEM / 95% CI), series distinguishable in grayscale.
 
 ---
 
@@ -294,9 +298,9 @@ All archives live in `outputs/migrate/`.
 | `/migrate export [--out DIR] [--include …] [--threshold BYTES] [--dry-run] [--non-interactive] [--encrypt] [--passphrase-env VAR]` | Scan repo, classify files, interactively register large unregistered experiment files, write `migrate-<host>-<ts>.zip`. AES via pyzipper if `--encrypt`. |
 | `/migrate import <archive.zip> [--dry-run] [--passphrase-env VAR]` | Restore. Never overwrites — collisions get `.from-migrate-<ts>.<ext>` suffix; non-empty DBs become `.from-migrate.db`. |
 | `/migrate reindex [--namespace NS] [--summary]` | Walk on-disk truth (past-work, experiments, versions, ideas, boss, research-notes) and emit JSONL `{namespace,key,value,metadata}` to stdout for skill-side `memory_store`. |
-| `/migrate artifacts list --slug <SLUG>` | Print `external-artifacts.md` for one experiment. |
-| `/migrate artifacts register --slug <SLUG> --name ... --path ... [--glob --source --repo --revision --size --fetch-cmd]` | Append one external-artifact record non-interactively. |
-| `/migrate artifacts scan --slug <SLUG> [--threshold BYTES]` | Walk one experiment, prompt-register every unregistered ≥ threshold file. |
+| `/migrate artifacts --slug <SLUG> list` | Print `external-artifacts.md` for one experiment. |
+| `/migrate artifacts --slug <SLUG> register --name ... --path ... [--glob --source --repo --revision --size --fetch-cmd]` | Append one external-artifact record non-interactively. |
+| `/migrate artifacts --slug <SLUG> scan [--threshold BYTES]` | Walk one experiment, prompt-register every unregistered ≥ threshold file. |
 
 - Helpers: `migrate/{cli, cli_artifacts, archive, manifest, merge, scan, reindex}.py` (the `_synthesize_fetch_cmd` + `_resolve_passphrase` helpers live inside `cli.py`).
 - Output: `outputs/migrate/migrate-<host>-<ts>.zip`; reports under `outputs/migrate/imports/<stem>.report.md`.
@@ -324,7 +328,8 @@ arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<
                                           /paper       (venue → direction → bind →
                                                         scout → focus → motivate →
                                                         write → render → humanize →
-                                                        review → status → archive)
+                                                        review → verify → status →
+                                                        archive)
                                                        │
                                                        │     ╔════════════════════╗
                                                        ├────▶║ /experiment        ║
