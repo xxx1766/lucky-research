@@ -10,7 +10,6 @@ import argparse
 import pytest
 
 from research_assistant import common
-from research_assistant.migrate import cli_artifacts
 from research_assistant.migrate.cli_artifacts import (
     cmd_artifacts_list,
     cmd_artifacts_register,

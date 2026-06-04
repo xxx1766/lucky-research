@@ -7,7 +7,6 @@ raise) since the data index is user-edited.
 """
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import research_assistant.experiments as _exp  # late attribute access for EXPERIMENTS_DIR
