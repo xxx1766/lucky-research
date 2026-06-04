@@ -35,6 +35,35 @@ Reference figures (style inspiration) are global:
 `inputs/figure-refs/<slug>/{image, note.md}` + AgentDB
 `project/figure-refs/<slug>`.
 
+## Evidence-first & QA (always applies)
+
+Same anti-fabrication spine as `/paper write` / `/paper verify`, applied to
+figures. Adapted from the *academic-figure* skill of
+[joshua-zyy/academic-paper-writer](https://github.com/joshua-zyy/academic-paper-writer).
+
+**Never fabricate.** A figure serves a claim — it is never ornament.
+- **Data plots:** plot only user-provided experiment data or already-verified
+  numbers. Never synthesise plausible-looking points to fill a curve. If the
+  data isn't on hand, stop and tell the user which file/metric is missing
+  rather than inventing it (mirrors the `[DATA_NEEDED]` discipline in prose).
+- **Architecture / structural diagrams:** draw only modules, connections, and
+  data flows that the actual code (at the bound repo SHA) or the paper supports.
+  Don't invent a block or an arrow to make the diagram look complete. Mark any
+  element you can't confirm with a literal `[VERIFY_ARCH: <what's unconfirmed>]`
+  text node in the SVG and list it in the note's body — the user resolves it
+  before the figure ships, exactly like a prose placeholder.
+
+**Data-plot QA checklist** (verify before declaring a data figure done):
+1. No rainbow / jet colormap — use the resolved academic palette only.
+2. A truncated axis (non-zero origin) is explicitly marked / annotated.
+3. Error bars / bands state their type in the caption (std / SEM / 95% CI).
+4. Series are distinguishable in grayscale — never hue alone (pair with dash /
+   marker), per the existing `latex-conventions.md` rule.
+5. Panel labels (a/b/c) and the caption serve the figure's claim.
+
+Surface this checklist's result in the `/figure new` data-path output so the
+user sees it was applied.
+
 ## Cursor reads (always do this first)
 
 At every `/figure ...` invocation, read both cursors:
@@ -146,6 +175,10 @@ For **kind=structural**:
    - **Hard rules** for any text inside the SVG (labels, legends,
      annotations): no `;` as punctuation, no `---` or `--` as prose
      punctuation. Restructure with commas or split labels.
+   - **Evidence-first** (see "Evidence-first & QA" above): draw only
+     code/paper-supported modules and flows; mark anything unconfirmed as a
+     `[VERIFY_ARCH: …]` text node and record it in the note body — never
+     invent structure to look complete.
 2. Decide D2 scaffold opt-in: if structure is genuinely auto-layout (boxes + arrows), generate a `.d2` source first, call `d2.scaffold_to_svg(...)`. If it returns `None`, fall back to raw SVG generation. If success, set `backend: d2-scaffolded`; otherwise `backend: raw-svg`.
 3. Write `<slug>.svg` to the resolved figures dir.
 4. Call `figures.export.export(svg_path)`. On `ExportError`, leave the SVG and tell the user to inspect.
@@ -181,9 +214,17 @@ For **kind=data**:
      white printing.
 4. Jupyter-friendly: if the user prefers to iterate in a notebook, develop in Jupyter and export to `.py` via `jupytext --to py <name>.ipynb` or `File → Save As → .py`. The committed `plot_<slug>.py` stays the source of truth; the figure-tool does not generate `.ipynb` files.
 5. Execute the script (Bash: `python <path-to-plot-script>`). Pipe output; if non-zero exit, surface stderr.
-6. Write `<slug>.note.md` via `write_note(...)` with `backend: matplotlib`.
-7. Experiment scope: same `append_figures_to_version` link-back as structural.
-8. Print the LaTeX include snippet.
+   **Evidence-first:** the script must read real data (a CSV/TSV path or values
+   the user confirmed in Step 1+3). Never hardcode invented numbers to produce
+   a nice-looking curve — if the data isn't available, stop and name the
+   missing file/metric.
+6. Run the **data-plot QA checklist** ("Evidence-first & QA" above): palette
+   (no rainbow/jet), axis-truncation marked, error-bar type stated, grayscale-
+   distinguishable, labels serve the claim. Note any item that fails.
+7. Write `<slug>.note.md` via `write_note(...)` with `backend: matplotlib`.
+8. Experiment scope: same `append_figures_to_version` link-back as structural.
+9. Print the LaTeX include snippet, followed by a one-line QA summary
+   (`QA: palette ✓ · axis ✓ · error-bars n/a · grayscale ✓`).
 
 ## Insert snippet
 

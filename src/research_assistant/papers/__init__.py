@@ -381,6 +381,11 @@ from research_assistant.papers.placeholders import (  # noqa: E402
     debt_summary,
     scan_placeholders,
 )
+from research_assistant.papers.claim_strength import (  # noqa: E402
+    STRENGTH_RULES,
+    StrengthHit,
+    scan_strength_words,
+)
 from research_assistant.papers.preflight import (  # noqa: E402
     GateCheck,
     PreflightResult,
@@ -422,6 +427,8 @@ __all__ = [
     "PASS_ORDER",
     "Placeholder",
     "PreflightResult",
+    "STRENGTH_RULES",
+    "StrengthHit",
     "SyncResult",
     "VerificationReport",
     "VenueRefAnalysis",
@@ -448,6 +455,7 @@ __all__ = [
     "report_to_markdown",
     "restore",
     "scan_placeholders",
+    "scan_strength_words",
     "slugify_paper_ref",
     "sync",
     "unarchive_direction",

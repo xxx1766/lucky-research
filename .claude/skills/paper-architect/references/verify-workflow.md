@@ -76,11 +76,34 @@ these fail; capture the reason in the debt note:
    unjustified?
 5. Is there a confound or alternative explanation the section doesn't address?
 6. Are limitations stated honestly, or buried/omitted?
-7. Does any sentence overclaim relative to its evidence ("proves", "guarantees",
-   unqualified "SOTA")?
+7. Does any sentence overclaim relative to its evidence (see the
+   claim-strength audit below)?
+
+### Claim-strength audit (adapted from APW's *academic-polishing*)
+
+Run `research_assistant.papers.scan_strength_words(direction_dir)` — a
+deterministic scan that flags high-risk strength words. A flag is **not**
+automatically a debt; for each hit, check whether the *required evidence* is
+present. If it is (e.g. "significantly (p<0.01)"), leave it. If not, it is an
+overclaim → open `consistency` debt and recommend the downgrade.
+
+| word | requires | downgrade if absent |
+|---|---|---|
+| significant(ly) | a significance test (p<0.05) or effect size | state the concrete numerical difference |
+| robust / robustness | multiple seeds / cross-val / external test set | "consistent within the observed setting" |
+| demonstrate(s) | a fully reproduced result, no protocol gaps | "suggests" / "aligns with" |
+| generalize / generalization | an independent or multi-dataset test set | restrict to the evaluated dataset |
+| state-of-the-art / SOTA | full baseline comparison on an independent test set | "within the compared scope" |
+| prove(s) | a formal proof or exhaustive evidence | "show" / "provide evidence that" |
+
+**Evidence-strength tiers** (match verb to evidence, never above it):
+- **Strong** — local reproduction, no protocol gaps → "show", "demonstrate".
+- **Medium** — internal validation only → "suggest", "indicate".
+- **Weak** — user claim, unverifiable → "may", "could", or `[CLAIM_UNVERIFIED]`.
 
 This pass does **not** rewrite — it judges. Defects become `consistency`
-debt + notes the user (or a later `/paper write` round) must resolve.
+debt + notes the user (or a later `/paper write` round) must resolve. The
+mechanical downgrades themselves are a job for `/paper humanize`, not verify.
 
 ## Pass 3 — Style (only after 1 & 2)
 

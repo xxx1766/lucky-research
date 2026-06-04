@@ -38,7 +38,7 @@ that pull it in:
 | `references/write-workflow.md` | Stage 6's full step-by-step: **preflight gate** (`write_preflight` — venue/focus/literature blocking + evidence warning), **placeholder tokens** (`[REF_NEEDED]`/`[FIGURE_NEEDED]`/`[DATA_NEEDED]`/`[CLAIM_UNVERIFIED]` evidence-first rules) + **placeholder audit** (`scan_placeholders`), cross-cutting principles, no-section-given path, section-given path (kind resolution, family stacking, intro funnel gate, title revisit, draft, banned-phrase scan, hard-rule lint, `% TODO` block), figure-inclusion + algorithm-inclusion blocks (with the exact `\includegraphics` / `\input{algorithms/...}` shapes and `<W>` size mapping), auto-render fallback chain. | Stage 6 (when drafting begins) |
 | `references/humanize-prompt.md` | Verbatim "去 AI 味（LaTeX 英文）" prompt prelude. Three-part response format (`Part 1 [LaTeX]`, `Part 2 [Translation]`, `Part 3 [Modification Log]`); `[检测通过]` sentinel meaning "already natural, skip rewrite". | Stage 8.5 (`/paper humanize`) |
 | `references/review-prompt.md` | Verbatim reviewer-perspective audit prompt. Two-part response (`Part 1 [The Review Report]`, `Part 2 [Strategic Advice]`); uses the `{{TARGET_VENUE}}` token (substituted in code, model never sees it). | Stage 8.6 (`/paper review`) |
-| `references/verify-workflow.md` | Source-level evidence-closure protocol: the iron three-pass order (Evidence → Argument → Style, no skipping), the 5 debt classes (hard `citation`/`evidence`/`consistency`/`prose` + soft `figure`), Pass-1/2/3 checklists, claim → evidence map, computed verdict (`passed`/`failed`/`blocked`) + 3-round cap, score rubric. | Stage 8.7 (`/paper verify`) |
+| `references/verify-workflow.md` | Source-level evidence-closure protocol: the iron three-pass order (Evidence → Argument → Style, no skipping), the 5 debt classes (hard `citation`/`evidence`/`consistency`/`prose` + soft `figure`), Pass-1/2/3 checklists, the **claim-strength audit** table (`scan_strength_words` → overclaim → `consistency` debt) + evidence-strength verb tiers, claim → evidence map, computed verdict (`passed`/`failed`/`blocked`) + 3-round cap, score rubric. | Stage 8.7 (`/paper verify`) |
 
 ## Progress display
 
@@ -92,8 +92,14 @@ Helpers (all in `research_assistant.papers`):
   renderers above.
 - `scan_placeholders(direction_dir) -> list[Placeholder]` — every evidence-first
   token with file/line/hint (Stage 6 placeholder audit).
+- `scan_strength_words(direction_dir) -> list[StrengthHit]` — high-risk strength
+  words (significant / robust / SOTA / …) with required-evidence + downgrade,
+  advisory input to Stage 8.7 Pass 2.
 - `write_preflight(direction_dir, venue_dir, section_kind, evidence_present=None)
   -> PreflightResult` — Stage 6 hard gates; `.blocked` + `.render()`.
+- `write_verification_report(direction_dir, report) -> Path` — persist a
+  finalized `VerificationReport` (Stage 8.7); `debt_summary` reads prose /
+  consistency back from these.
 
 ## Directory layout this skill owns
 
@@ -249,6 +255,21 @@ on-disk state).
 2. Create `outputs/papers/<venue>/` if missing.
 3. AI drafts `_venue.md` from the CFP. Sections: page limit, deadlines, review criteria,
    accepted paper styles, recent trends, scoring rubric.
+   **Source provenance (adapted from APW's *academic-venue-research*).** Every
+   *requirement* fact (page limit, every deadline, format, dual-submission /
+   anonymity policy) carries an inline provenance tag so a stale or guessed
+   value can never masquerade as confirmed:
+   - `(src: <url> @ <YYYY-MM-DD>)` — fetched from a primary source (CFP / author
+     guidelines / official template) on that date. Prefer WebFetch; record the
+     fetch date.
+   - `(src: unverified)` — drafted from model knowledge, not fetched. The user
+     must confirm before relying on it.
+   - `(src: unknown)` — couldn't determine; treat as a gap, not a fact.
+   Rules: a **primary source wins** over blogs/summaries; **deadlines** are the
+   highest-risk facts — never emit a bare date, always tag it, and prefer
+   `unverified` over a confident-looking guess. Published reference papers
+   (Stage 1b) inform *writing style only* — they may never define a submission
+   requirement.
 4. Show user the draft; accept inline edits.
 5. Write `outputs/papers/<venue>/_venue.md`.
 6. `mcp__claude-flow__memory_store(namespace="project/paper-context", key="current",
@@ -260,7 +281,10 @@ on-disk state).
 
        cp -r docs/venues/<CONF>/<YEAR>/* outputs/papers/<venue>/
 
-   Then re-read `_venue.md` and refresh deadlines for this cycle. If
+   Then re-read `_venue.md` and refresh deadlines for this cycle — a copied
+   snapshot's dates are from a prior cycle, so re-tag each refreshed deadline
+   with a current `(src: <url> @ <today>)` or drop it to `(src: unverified)`
+   until confirmed (see step 3's provenance rules). If
    `docs/venues/<CONF>/<YEAR>/` is missing, fall back to the manual path:
    tell the user to drop the conference `.sty`, `.cls`, and (optional)
    `.bst` files into `outputs/papers/<venue>/_template/` — the skill does
@@ -716,8 +740,10 @@ don't polish prose over unverified facts.
    mirrored `results/`). Set `citation` / `evidence` / `figure` debt status;
    confirm `refs.unresolved_cite_keys(direction_dir) == []`.
 3. **Pass 2 — Argument.** Read as a skeptical reviewer (the 7 risk questions in
-   `verify-workflow.md`). Open `consistency` debt with a note when a promise,
-   baseline, ablation, or overclaim fails.
+   `verify-workflow.md`). Run `papers.scan_strength_words(direction_dir)` and
+   check each high-risk word against its required evidence (the claim-strength
+   table); an unsupported one is an overclaim. Open `consistency` debt with a
+   note when a promise, baseline, ablation, or overclaim fails.
 4. **Pass 3 — Style.** Only now: open `prose` debt for comprehension-blocking
    defects (not taste — that's `/paper humanize`).
 5. Build the `VerificationReport` (`section`, `date`=today, `round`, `score`
