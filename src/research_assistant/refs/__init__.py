@@ -230,6 +230,35 @@ def _strip_tex_comment(line: str) -> str:
     return "".join(out)
 
 
+def bib_entry_keys(refs_bib: Path) -> set[str]:
+    r"""Return the set of entry keys (``@type{KEY, …}``) defined in `refs_bib`.
+
+    Returns an empty set when the file is missing or unparseable — a malformed
+    bib should surface as "everything is unresolved", not crash the caller.
+    """
+    refs_path = Path(refs_bib)
+    if not refs_path.is_file():
+        return set()
+    try:
+        with refs_path.open(encoding="utf-8") as f:
+            db = bibtexparser.load(f, parser=BibTexParser(common_strings=True))
+    except Exception:
+        return set()
+    return {e["ID"] for e in db.entries if e.get("ID")}
+
+
+def unresolved_cite_keys(direction_dir: Path) -> list[str]:
+    r"""List `\cite{}` keys used in the prose with no matching `refs.bib` entry.
+
+    These are *citation debts*: the draft cites a key that ``/cite`` has not yet
+    resolved into ``refs.bib``. Preserves first-seen order (from
+    :func:`scan_tex_cite_keys`) for deterministic reporting.
+    """
+    cited = scan_tex_cite_keys(direction_dir)
+    have = bib_entry_keys(Path(direction_dir) / "refs.bib")
+    return [k for k in cited if k not in have]
+
+
 # ---------------------------------------------------------------------------
 # LaTeX render
 # ---------------------------------------------------------------------------

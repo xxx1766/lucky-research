@@ -32,6 +32,15 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 5. No source edit needed — `\cite{slug}` keys already match `refs.bib`
    entries.
 
+**Citation-debt check (evidence-first).** A `\cite{slug}` in the prose with no
+matching `refs.bib` entry is a *citation debt* — `paper-architect` surfaces it
+on the progress board. Use
+`research_assistant.refs.unresolved_cite_keys(direction_dir)` to list those keys
+(it diffs `scan_tex_cite_keys` against `bib_entry_keys(refs.bib)`). After a
+`/cite` run, the right outcome is an empty list; any remainder means the slug
+has no `papers/<slug>` bibinfo and no known DOI — leave it as a `[REF_NEEDED]`
+gap rather than inventing an entry.
+
 ### Format conversion
 
 1. Call `research_assistant.refs.convert_document` (shells out to pandoc).

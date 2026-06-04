@@ -224,3 +224,62 @@ def test_render_progress_board_marks_partial_write(tmp_path):
     board = render_progress_board("NeurIPS-2026", "diffusion-ft", status)
     write_line = next(ln for ln in board.splitlines() if "6. write" in ln)
     assert write_line.lstrip().startswith("[.]")
+
+
+# ---------- debt surfacing (batch 1: gates + placeholders) ----------
+
+from research_assistant.papers import DebtSummary  # noqa: E402
+
+
+def test_board_omits_debt_line_when_debts_none():
+    board = render_progress_board("NeurIPS-2026", "diffusion-ft", _all_done_status())
+    assert "debts" not in board
+    # Still exactly seven stage rows.
+    stage_lines = [
+        ln for ln in board.splitlines()
+        if ln.lstrip().startswith(("[x]", "[.]", "[ ]"))
+    ]
+    assert len(stage_lines) == 7
+
+
+def test_board_shows_open_debts():
+    debts = DebtSummary(citation=1, evidence=1)
+    board = render_progress_board(
+        "NeurIPS-2026", "diffusion-ft", _all_done_status(), debts
+    )
+    debt_line = next(ln for ln in board.splitlines() if "debts" in ln)
+    assert "2 open" in debt_line
+    # Debt line must not register as a stage row.
+    assert not debt_line.lstrip().startswith(("[x]", "[.]", "[ ]"))
+
+
+def test_board_shows_clean_when_zero_debts():
+    board = render_progress_board(
+        "NeurIPS-2026", "diffusion-ft", _all_done_status(), DebtSummary()
+    )
+    debt_line = next(ln for ln in board.splitlines() if "debts" in ln)
+    assert "none" in debt_line
+
+
+def test_footer_appends_debt_warning():
+    status = _all_done_status()
+    footer = render_progress_footer(
+        "NeurIPS-2026", "diffusion-ft", status, DebtSummary(citation=3)
+    )
+    assert "3 debts" in footer
+    assert "next:" in footer
+
+
+def test_footer_no_debt_segment_when_zero():
+    footer = render_progress_footer(
+        "NeurIPS-2026", "diffusion-ft", _all_done_status(), DebtSummary()
+    )
+    assert "debt" not in footer
+
+
+def test_footer_singular_debt():
+    footer = render_progress_footer(
+        "NeurIPS-2026", "diffusion-ft", _all_done_status(), DebtSummary(figure=1)
+    )
+    assert "1 debt" in footer
+    assert "1 debts" not in footer

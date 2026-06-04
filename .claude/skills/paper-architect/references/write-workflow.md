@@ -40,6 +40,63 @@ triggers; this file has the full decision flow.
   rewrite, update the Chinese to match the new English so the two stay in
   sync. See `latex-conventions.md` section `hard-rules` for the exact shape.
 
+## Preflight gate (run before drafting anything)
+
+Adapted from the *hard gate* discipline in
+[joshua-zyy/academic-paper-writer](https://github.com/joshua-zyy/academic-paper-writer):
+a section is not drafted until its prerequisites exist on disk.
+
+1. Resolve the section kind first (synonym map below), then call:
+
+   ```python
+   research_assistant.papers.write_preflight(
+       direction_dir,            # outputs/papers/<venue>/<direction>/
+       venue_dir,                # outputs/papers/<venue>/
+       section_kind,             # resolved kind, or None for the outline scaffold call
+       evidence_present=...,     # for results-kind: bool from
+                                 # collect_experiment_results_for_paper(); else omit
+   )
+   ```
+
+2. The returned `PreflightResult` carries two strengths of gate:
+   - **blocking** → if `result.blocked`, print `result.render()` and **STOP**.
+     The user clears the named gate (or re-runs `/paper write <section> --force`
+     to override). Blocking gates:
+     * `venue` — `_venue.md` missing → `/paper venue <slug>`.
+     * `focus` — `focused-problem.md` missing → `/paper focus`.
+     * `literature` — drafting `intro` / `related-work` with an empty
+       `related-papers/` and no `literature_exempt: true` in `expert.md` →
+       `/paper scout` (or set the exempt flag).
+   - **warning** → drafting proceeds, but echo `result.render()` so the user
+     sees it. The one warning gate:
+     * `evidence` — a `results` section with no experiment result yet. Allowed,
+       but every reported number MUST be a `[DATA_NEEDED: …]` placeholder until
+       `/experiment version add` lands a real value.
+
+3. `--force` skips the **blocking** check only (warnings still print). Use it
+   when the user knowingly drafts ahead of a prerequisite.
+
+## Placeholder tokens (evidence-first)
+
+**Never fabricate a citation, a number, or a result.** When the support for a
+claim is not yet on hand, leave an explicit token instead of an invented fact —
+the gap is tracked as a *debt* that a later stage closes:
+
+| Token | Use when | Closed by |
+|---|---|---|
+| `[REF_NEEDED: <what to cite>]` | a claim needs a citation you don't have a `\cite{slug}` for | `/paper scout` + `/cite` |
+| `[FIGURE_NEEDED: <what it shows>]` | a figure is referenced but not yet rendered | `/figure new <slug>` |
+| `[DATA_NEEDED: <which number, from where>]` | a result/number needs an experiment version | `/experiment version add` |
+| `[CLAIM_UNVERIFIED: <the assertion>]` | an assertion you have not checked | `/paper verify` (batch 2) / manual |
+
+Rules:
+- A token is plain bracketed text in the prose (it renders visibly in the PDF —
+  that visibility is the point). Do **not** hide a gap in a `%` comment.
+- Prefer a real `\cite{slug}` over `[REF_NEEDED]` whenever a matching
+  `papers/<slug>` exists — the token is only for genuinely missing support.
+- Once a token's support lands, replace the token with the real citation /
+  `\includegraphics` / number.
+
 ## Workflow
 
 ### If no section given (first write call)
@@ -120,10 +177,19 @@ triggers; this file has the full decision flow.
    writing — every paragraph should be traceable to a beat. **Cite directly
    as `\cite{<slug>}`** (no `[@cite:]` placeholder). `<slug>` should match
    `papers/<slug>` in AgentDB so `/cite` can resolve it into `refs.bib`.
+   **Evidence-first:** for any claim whose support is not yet on hand, leave a
+   placeholder token (`[REF_NEEDED]` / `[FIGURE_NEEDED]` / `[DATA_NEEDED]` /
+   `[CLAIM_UNVERIFIED]`, see "Placeholder tokens" above) — never invent a
+   citation, number, or result to fill the gap.
 6. **Banned-phrase scan.** If kind is `intro`, after writing the file run
    `grep -niE 'novel|first ever|first time|paradigm-(changing|shifting)|we propose' sections/intro.tex`
    and print each hit; suggest a rewrite but leave the file as-is.
 7. Append a `% TODO:` LaTeX comment block listing experiments still needed.
+8. **Placeholder audit.** Call
+   `research_assistant.papers.scan_placeholders(direction_dir)` and, if the
+   list is non-empty, print a short table (`token · file:line · hint`) so the
+   user sees exactly which debts this draft opened. This is reporting only — do
+   not rewrite. The same debts roll up into the progress footer (see below).
 
 ### Auto-render after every successful section write
 
@@ -139,8 +205,9 @@ triggers; this file has the full decision flow.
    (`brew install tectonic` / `cargo install tectonic` /
    `apt install texlive-latex-extra`) and skip the render.
 
-After everything above (whether the render fired or not), print
-`render_progress_footer(venue, direction, stage_status(direction_dir))`.
+After everything above (whether the render fired or not), print the footer
+**with the debt roll-up** so any tokens just opened are visible:
+`render_progress_footer(venue, direction, stage_status(direction_dir), debt_summary(direction_dir))`.
 
 ## Figure inclusion
 

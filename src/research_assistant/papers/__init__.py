@@ -176,16 +176,26 @@ def render_progress_footer(
     venue: str | None,
     direction: str | None,
     status: StageStatus | None,
+    debts: DebtSummary | None = None,
 ) -> str:
-    """One-line progress footer printed at the end of every /paper subcommand."""
+    """One-line progress footer printed at the end of every /paper subcommand.
+
+    ``debts`` is optional — stages that have already resolved the direction
+    (``write`` / ``verify`` / ``status``) may pass
+    ``papers.debt_summary(direction_dir)`` to surface open debts inline.
+    """
     if not venue:
         return "── no current paper · next: /paper venue <slug> ──"
     if direction is None or status is None:
         return f"── {venue} · venue set{_venue_refs_suffix(venue)} · next: /paper direction <slug> ──"
     bar, done = _progress_bar(status)
+    debt_seg = ""
+    if debts is not None and debts.total:
+        debt_seg = f"⚠ {debts.total} debt{'s' if debts.total != 1 else ''}   "
     return (
         f"── {venue} / {direction}   "
         f"[{bar}] {done}/{_BAR_WIDTH}   "
+        f"{debt_seg}"
         f"next: {next_suggested(status)} ──"
     )
 
@@ -237,8 +247,18 @@ def _board_detail(stage: str, status: StageStatus) -> str:
     raise ValueError(f"unknown stage: {stage}")
 
 
-def render_progress_board(venue: str, direction: str, status: StageStatus) -> str:
-    """Multi-line full board for /paper status."""
+def render_progress_board(
+    venue: str,
+    direction: str,
+    status: StageStatus,
+    debts: DebtSummary | None = None,
+) -> str:
+    """Multi-line full board for /paper status.
+
+    When ``debts`` is supplied (``papers.debt_summary(direction_dir)``) a debt
+    sidebar line is shown alongside the ``cite`` line. The line never starts
+    with a ``[x]``/``[.]``/``[ ]`` marker, so it does not count as a stage row.
+    """
     bar, done = _progress_bar(status)
     lines = [
         f"{venue} / {direction}",
@@ -255,6 +275,13 @@ def render_progress_board(venue: str, direction: str, status: StageStatus) -> st
         else "refs.bib: 0 entries  ← /cite to populate"
     )
     lines.append(f"{cite_indent}{'cite':<10} {cite_detail}")
+    if debts is not None:
+        debt_detail = (
+            debts.as_line()
+            if debts.total
+            else "none ✓"
+        )
+        lines.append(f"{cite_indent}{'debts':<10} {debt_detail}")
     lines.append("")
     lines.append(f"Suggested next: {next_suggested(status)}")
     return "\n".join(lines)
@@ -347,6 +374,34 @@ from research_assistant.papers.venue_refs import (  # noqa: E402
     venue_refs_dir,
     venue_refs_summary,
 )
+from research_assistant.papers.placeholders import (  # noqa: E402
+    DEBT_BY_TOKEN,
+    DebtSummary,
+    Placeholder,
+    debt_summary,
+    scan_placeholders,
+)
+from research_assistant.papers.preflight import (  # noqa: E402
+    GateCheck,
+    PreflightResult,
+    write_preflight,
+)
+from research_assistant.papers.verification import (  # noqa: E402
+    MAX_VERIFY_ROUNDS,
+    PASS_ORDER,
+    ClaimEvidence,
+    DebtEntry,
+    VerificationReport,
+    collect_claims,
+    compute_verdict,
+    finalize_verdict,
+    naked_claims,
+    read_latest_reports,
+    report_from_markdown,
+    report_to_markdown,
+    verify_debt_counts,
+    write_verification_report,
+)
 
 __all__ = [
     "AlreadyBoundError",
@@ -356,24 +411,43 @@ __all__ = [
     "BindError",
     "BindingResult",
     "ConflictError",
+    "DEBT_BY_TOKEN",
+    "ClaimEvidence",
+    "DebtEntry",
+    "DebtSummary",
     "DivergedError",
+    "GateCheck",
+    "MAX_VERIFY_ROUNDS",
     "NotBoundError",
+    "PASS_ORDER",
+    "Placeholder",
+    "PreflightResult",
     "SyncResult",
+    "VerificationReport",
     "VenueRefAnalysis",
     "VenueRefEntry",
     "VenueRefsSummary",
     "archive_direction",
     "bind",
+    "collect_claims",
     "collect_experiment_results_for_paper",
+    "compute_verdict",
+    "debt_summary",
     "distill_venue_conventions",
     "family_for_venue",
+    "finalize_verdict",
     "find_experiments_for_paper",
     "ingest_venue_ref",
     "is_bound",
     "list_archived",
     "list_venue_refs",
+    "naked_claims",
     "read_binding_from_expert_md",
+    "read_latest_reports",
+    "report_from_markdown",
+    "report_to_markdown",
     "restore",
+    "scan_placeholders",
     "slugify_paper_ref",
     "sync",
     "unarchive_direction",
@@ -381,4 +455,7 @@ __all__ = [
     "venue_ref_path",
     "venue_refs_dir",
     "venue_refs_summary",
+    "verify_debt_counts",
+    "write_preflight",
+    "write_verification_report",
 ]

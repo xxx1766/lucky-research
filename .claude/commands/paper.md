@@ -1,6 +1,6 @@
 ---
 name: paper
-description: Multi-stage paper-output workflow — venue, direction, scout, focus, motivate, write, render, status
+description: Multi-stage paper-output workflow — venue, direction, scout, focus, motivate, write, render, verify, status
 ---
 
 # /paper
@@ -55,6 +55,15 @@ Invoke the `paper-architect` skill in the stage matching `$ARGUMENTS`.
   `<direction>/reviews/review-<YYYY-MM-DD>.md`. Use before submission, rebuttal,
   or advisor sync. `--target` overrides the venue used in the prompt (default =
   current cursor venue).
+- `/paper verify [<section>] [--round N]` — source-level evidence-closure audit
+  (the engineering counterpart to `/paper review`). Runs three ordered passes —
+  **Evidence → Argument → Style** (no skipping) — over the `.tex` source +
+  bound-experiment outputs, building a typed debt ledger (`citation` /
+  `evidence` / `consistency` / `prose` hard · `figure` soft) + a
+  claim → evidence map. The verdict (`passed` / `failed` / `blocked`) is
+  computed from the ledger, with a 3-round cap → `unresolvable`. Writes
+  `<direction>/reviews/verify-<section>-<YYYY-MM-DD>.md`; open `consistency` /
+  `prose` debts surface on the `/paper status` board.
 - `/paper status [<venue>/<direction>] [--all]` — print the progress board for the
   current direction (also persisted to `<direction>/status.md`). Pass an explicit
   `<venue>/<direction>` to target a specific folder and adopt it as the new cursor

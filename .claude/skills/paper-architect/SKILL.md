@@ -16,7 +16,7 @@ stages assume earlier ones are non-empty.
 ```
 venue → direction → scout → focus → motivate → write ↔ experiments
                                                  │
-                                                 ├─ humanize · review (post-write polish + audit)
+                                                 ├─ humanize · review · verify (post-write polish + audit)
                                                  ├─ status snapshot any time
                                                  └─ render any time (auto after write)
 ```
@@ -35,9 +35,10 @@ that pull it in:
 |---|---|---|
 | `references/section-heuristics.md` | Per-section-kind Do/Don't/Beats lists (adapted from xxx1766's "how to write a paper"). Includes the `<synonym map>` for `design`/`approach`→`method`, `evaluation`/`eval`→`results`, …, the `## section: <kind>` blocks, and `## family: <name>` additive overrides for `systems` / `nlp` / `cv`. | Stage 6 (always, before drafting any section) |
 | `references/latex-conventions.md` | Project-wide LaTeX style rules: `hard-rules` (no `---`, no `--` outside numeric ranges, no bare `;`, Chinese-comment shape), math notation, tables-and-figures (`Caption format` etc.), word choice, tense, citations, paragraph layout, pre-submission checklist. | Stage 6 (always); Stages 8.5 / 8.6 (lint reference) |
-| `references/write-workflow.md` | Stage 6's full step-by-step: cross-cutting principles, no-section-given path, section-given path (kind resolution, family stacking, intro funnel gate, title revisit, draft, banned-phrase scan, hard-rule lint, `% TODO` block), figure-inclusion + algorithm-inclusion blocks (with the exact `\includegraphics` / `\input{algorithms/...}` shapes and `<W>` size mapping), auto-render fallback chain. | Stage 6 (when drafting begins) |
+| `references/write-workflow.md` | Stage 6's full step-by-step: **preflight gate** (`write_preflight` — venue/focus/literature blocking + evidence warning), **placeholder tokens** (`[REF_NEEDED]`/`[FIGURE_NEEDED]`/`[DATA_NEEDED]`/`[CLAIM_UNVERIFIED]` evidence-first rules) + **placeholder audit** (`scan_placeholders`), cross-cutting principles, no-section-given path, section-given path (kind resolution, family stacking, intro funnel gate, title revisit, draft, banned-phrase scan, hard-rule lint, `% TODO` block), figure-inclusion + algorithm-inclusion blocks (with the exact `\includegraphics` / `\input{algorithms/...}` shapes and `<W>` size mapping), auto-render fallback chain. | Stage 6 (when drafting begins) |
 | `references/humanize-prompt.md` | Verbatim "去 AI 味（LaTeX 英文）" prompt prelude. Three-part response format (`Part 1 [LaTeX]`, `Part 2 [Translation]`, `Part 3 [Modification Log]`); `[检测通过]` sentinel meaning "already natural, skip rewrite". | Stage 8.5 (`/paper humanize`) |
 | `references/review-prompt.md` | Verbatim reviewer-perspective audit prompt. Two-part response (`Part 1 [The Review Report]`, `Part 2 [Strategic Advice]`); uses the `{{TARGET_VENUE}}` token (substituted in code, model never sees it). | Stage 8.6 (`/paper review`) |
+| `references/verify-workflow.md` | Source-level evidence-closure protocol: the iron three-pass order (Evidence → Argument → Style, no skipping), the 5 debt classes (hard `citation`/`evidence`/`consistency`/`prose` + soft `figure`), Pass-1/2/3 checklists, claim → evidence map, computed verdict (`passed`/`failed`/`blocked`) + 3-round cap, score rubric. | Stage 8.7 (`/paper verify`) |
 
 ## Progress display
 
@@ -50,8 +51,8 @@ Both visualizations are produced by pure helpers in
 a Markdown string. The skill body just prints what they return.
 
 ```
-# footer (after any /paper subcommand)
-── NeurIPS-2026 / diffusion-finetune   [######-] 6/7   next: /paper render ──
+# footer (after any /paper subcommand) — ⚠ N debts shows only when > 0
+── NeurIPS-2026 / diffusion-finetune   [######-] 6/7   ⚠ 2 debts   next: /paper render ──
 
 # board (from /paper status)
 NeurIPS-2026 / diffusion-finetune
@@ -65,6 +66,7 @@ NeurIPS-2026 / diffusion-finetune
   [.] 6. write       outline.md · 2 sections · main.tex
   [ ] 7. render      main.pdf missing
          cite        refs.bib: 0 entries  ← /cite to populate
+         debts       2 open · 1 citation · 1 evidence
 
 Suggested next: /paper render
 ```
@@ -72,15 +74,26 @@ Suggested next: /paper render
 The 7-stage bar counts pipeline checkpoints
 (`venue, direction, scout, focus, motivate, write, render`); `cite` is shown as a
 sidebar check because `/cite` is a separate command. Use `[x]` done / `[.]` partial /
-`[ ]` empty.
+`[ ]` empty. The `debts` sidebar (shown when a direction is resolved) rolls up
+open placeholder tokens + unresolved `\cite{}` keys by class — see Stage 6's
+evidence-first rules; `none ✓` when clear.
 
 Helpers (all in `research_assistant.papers`):
 
 - `stage_status(direction_dir) -> StageStatus` — inspect a direction folder.
-- `render_progress_footer(venue, direction, status) -> str` — one-line footer.
-  Tolerates `None` for direction/status (use during Stage 1 or before any venue).
-- `render_progress_board(venue, direction, status) -> str` — full Markdown board.
+- `render_progress_footer(venue, direction, status, debts=None) -> str` —
+  one-line footer. Tolerates `None` for direction/status (use during Stage 1 or
+  before any venue). Pass `debts` to append `⚠ N debts` when > 0.
+- `render_progress_board(venue, direction, status, debts=None) -> str` — full
+  Markdown board. Pass `debts` to add the `debts:` sidebar line.
 - `next_suggested(status) -> str` — the next-step command shown in both renders.
+- `debt_summary(direction_dir) -> DebtSummary` — open debts by class
+  (placeholder tokens + unresolved `\cite{}`). Pass its result to the two
+  renderers above.
+- `scan_placeholders(direction_dir) -> list[Placeholder]` — every evidence-first
+  token with file/line/hint (Stage 6 placeholder audit).
+- `write_preflight(direction_dir, venue_dir, section_kind, evidence_present=None)
+  -> PreflightResult` — Stage 6 hard gates; `.blocked` + `.render()`.
 
 ## Directory layout this skill owns
 
@@ -358,6 +371,11 @@ venue: NeurIPS-2026
 direction: diffusion-finetune
 code_repo: "github:xxx1766/diffusion-finetune-exp"   # optional
 created: 2026-05-12
+literature_exempt: false                            # optional; set true to let
+                                                    # /paper write draft intro /
+                                                    # related-work before /paper
+                                                    # scout (clears the write
+                                                    # preflight literature gate)
 # --- binding fields (set by Stage 0 /paper bind, not direction) ---
 experiment: weightlet-1                             # optional; primary binding
 experiments: [weightlet-1, sparse-attn-2]           # optional; ALL bindings,
@@ -447,6 +465,22 @@ back to a built-in venue-prefix map. When the family is `systems`, `nlp`, or
 on top of the default `## section: <kind>` block. Users can pin a niche venue
 to the closest family by adding `Family: systems` to its `_venue.md`.
 
+**Preflight gate (run first, full prose in `write-workflow.md`).** Before
+drafting, call `research_assistant.papers.write_preflight(direction_dir,
+venue_dir, section_kind, evidence_present=...)`. If `result.blocked`, print
+`result.render()` and **STOP** — the user clears the gate (no `_venue.md` →
+`/paper venue`; no `focused-problem.md` → `/paper focus`; `intro`/`related-work`
+with empty `related-papers/` and no `literature_exempt` → `/paper scout`) or
+re-runs with `--force`. Warnings (e.g. a `results` section with no experiment
+yet) print but don't block.
+
+**Evidence-first — never fabricate.** A claim with no support gets a
+placeholder token, not an invented fact: `[REF_NEEDED: …]`,
+`[FIGURE_NEEDED: …]`, `[DATA_NEEDED: …]`, `[CLAIM_UNVERIFIED: …]`. After every
+write, run `papers.scan_placeholders(direction_dir)` and surface the tokens;
+they roll up into the footer/board as debts. Full token table + close-out paths
+in `write-workflow.md`.
+
 **Cross-cutting principles (full prose in `write-workflow.md`):**
 
 - **Drafting order is figures → method → results → related-work → intro →
@@ -491,8 +525,9 @@ top-level branches are:
 (tectonic → latexmk, missing-toolchain hint, last-40-log on failure, never
 undo the write) is in `write-workflow.md`.
 
-After everything above (whether the render fired or not), print
-`render_progress_footer(venue, direction, stage_status(direction_dir))`.
+After everything above (whether the render fired or not), print the footer
+with the debt roll-up:
+`render_progress_footer(venue, direction, stage_status(direction_dir), debt_summary(direction_dir))`.
 
 ## Stage 7 — `/paper status [<venue>/<direction>] [--all]`
 
@@ -501,20 +536,22 @@ After everything above (whether the render fired or not), print
 - **Default (current direction)**:
   1. Read `project/paper-context.current` to resolve `(venue, direction)`.
      If unset: print the no-venue / no-direction footer and stop.
-  2. Compute `status = stage_status(direction_path(venue, direction))`.
-  3. Print `render_progress_board(venue, direction, status)`.
+  2. Compute `status = stage_status(direction_path(venue, direction))` and
+     `debts = debt_summary(direction_path(venue, direction))`.
+  3. Print `render_progress_board(venue, direction, status, debts)` — the board
+     gains a `debts:` sidebar line (open count by class, or `none ✓`).
   4. Persist the same string (plus a trailing newline) to
      `<direction>/status.md` — overwrite, this is a snapshot.
-  5. Print `render_progress_footer(venue, direction, status)`.
+  5. Print `render_progress_footer(venue, direction, status, debts)`.
 - **Explicit target — `/paper status <venue>/<direction>`** (recovery path for
   in-flight projects whose AgentDB cursor is stale or unset):
   1. Parse the positional arg, split on `/` into `venue` and `direction`. Reject
      if either half is empty.
   2. Verify `direction_path(venue, direction)` exists on disk; if not, error out
      ("no such direction under outputs/papers/...") without writing anything.
-  3. Compute `status = stage_status(direction_path(venue, direction))`.
-  4. Print `render_progress_board(...)` and persist `<direction>/status.md`
-     (same as default).
+  3. Compute `status = stage_status(...)` and `debts = debt_summary(...)`.
+  4. Print `render_progress_board(venue, direction, status, debts)` and persist
+     `<direction>/status.md` (same as default).
   5. **Adopt the target as the new cursor**:
      `mcp__claude-flow__memory_store(namespace="project/paper-context",
      key="current", value={venue, direction})`. Subsequent stages pick up here.
@@ -523,10 +560,10 @@ After everything above (whether the render fired or not), print
   1. Walk `outputs/papers/*/` for venues.
   2. For each venue, walk subdirectories that are not `_template/`; treat each as
      a direction.
-  3. For each `(venue, direction)`, compute `stage_status`, print
-     `render_progress_board(...)` separated by `---` lines, and persist the same
-     string to `<direction>/status.md` (overwrite — one-shot refresh of every
-     direction's snapshot).
+  3. For each `(venue, direction)`, compute `stage_status` + `debt_summary`,
+     print `render_progress_board(venue, direction, status, debts)` separated by
+     `---` lines, and persist the same string to `<direction>/status.md`
+     (overwrite — one-shot refresh of every direction's snapshot).
   4. End with one `render_progress_footer(...)` for the current direction
      (whatever `project/paper-context.current` points at).
 
@@ -647,6 +684,60 @@ Used before submission / rebuttal / advisor sync. The prompt comes from
 - `outputs/papers/<v>/<d>/reviews/review-<YYYY-MM-DD>.md`
 
 **Memory keys touched** — none. This is purely a write-to-disk audit.
+
+## Stage 8.7 — `/paper verify [<section>] [--round N]`
+
+Source-level **evidence-closure** audit — the engineering counterpart to the
+PDF-reading `/paper review`. Where `review` judges the typeset paper as a
+reviewer, `verify` checks the `.tex` source + bound-experiment outputs against
+a typed **debt ledger** and a **claim → evidence map**, in three ordered passes.
+Full protocol in `references/verify-workflow.md`; load it when running this
+stage. Adapted from the *academic-reviser* discipline of
+[joshua-zyy/academic-paper-writer](https://github.com/joshua-zyy/academic-paper-writer).
+
+**Inputs**
+- Current `(venue, direction)` from cursor. Reject if unset.
+- Optional positional `<section>` — verify only `sections/<name>.tex` (kind
+  synonyms resolve as in `/paper write`). Default = every drafted section.
+- `--round N` — the revision round for the iteration cap (default: 1, or
+  one past the latest report's round for this section).
+
+**The iron rule:** run **Pass 1 Evidence → Pass 2 Argument → Pass 3 Style**, in
+that order, never skipping. Pass 3 is reporting-only while a hard debt is open —
+don't polish prose over unverified facts.
+
+**Workflow** (per section)
+1. Resolve cursor → `(venue, direction)`. Verify the section file(s) exist; if
+   none, point the user at `/paper write` and stop.
+2. **Pass 1 — Evidence.** Read the section. For every claim, add a
+   `ClaimEvidence(claim, evidence, verified)` row (`exp:<slug>@<vN.M>` /
+   `cite:<slug>` / `""` for naked). Cross-check numbers against
+   `papers.collect_experiment_results_for_paper(...)` (`analysis_tex` /
+   mirrored `results/`). Set `citation` / `evidence` / `figure` debt status;
+   confirm `refs.unresolved_cite_keys(direction_dir) == []`.
+3. **Pass 2 — Argument.** Read as a skeptical reviewer (the 7 risk questions in
+   `verify-workflow.md`). Open `consistency` debt with a note when a promise,
+   baseline, ablation, or overclaim fails.
+4. **Pass 3 — Style.** Only now: open `prose` debt for comprehension-blocking
+   defects (not taste — that's `/paper humanize`).
+5. Build the `VerificationReport` (`section`, `date`=today, `round`, `score`
+   1–10, `debts`, `claims`, `notes` = the three-pass narrative) and call
+   `papers.write_verification_report(direction_dir, report)`. It runs
+   `finalize_verdict` — **the verdict is computed from the ledger**, not your
+   opinion: `passed` (no open hard debt), `failed` (hard debt, round < 3),
+   `blocked`+`unresolvable` (hard debt at round 3).
+6. Print the verdict + score + open-debt list. If `papers.naked_claims(
+   direction_dir)` is non-empty, print those rows — they're the worst gaps.
+7. Print `render_progress_footer(venue, direction, stage_status(direction_dir),
+   debt_summary(direction_dir))` — `consistency`/`prose` now surface in the
+   board's `debts:` line beside the live citation/figure/evidence counts.
+
+**Output files**
+- `outputs/papers/<v>/<d>/reviews/verify-<section>-<YYYY-MM-DD>.md` — YAML
+  frontmatter (the machine-readable ledger: verdict, score, debts, claims) +
+  human-readable body. Collision-safe (`-2`, `-3`, …) for same-day reruns.
+
+**Memory keys touched** — none. Purely write-to-disk, like `humanize` / `review`.
 
 ## Stage 9 — `/paper archive [<venue>/<direction>] [--abandoned]`
 
