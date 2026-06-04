@@ -40,6 +40,24 @@ def test_figure_note_minimum_valid():
     assert note.backend == "raw-svg"
 
 
+def test_figure_note_accepts_trajectory_svg_backend():
+    # The zero-dep trajectory-SVG recipe sets backend: trajectory-svg; it must
+    # be a valid FigureBackend so the note round-trips through FigureNote.
+    note = FigureNote(
+        slug="loss-trajectory",
+        kind="data",
+        scope="experiment",
+        anchor="experiments/weightlet/v1.2",
+        intent="Training loss over steps.",
+        size=FigureSize(width_in=3.3, height_in=2.0, preset="single-column"),
+        palette="paper-trio",
+        refs=[],
+        backend="trajectory-svg",
+        created=date(2026, 6, 4),
+    )
+    assert note.backend == "trajectory-svg"
+
+
 def test_figure_note_rejects_unknown_kind():
     with pytest.raises(ValidationError):
         FigureNote(

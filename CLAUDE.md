@@ -80,7 +80,7 @@ outputs/papers/<venue>/   Venue-rooted paper-output tree:
     main.pdf                      auto-rendered preview / submission PDF
     status.md                     auto-updated stage tracker
 outputs/experiments/      Per-experiment tree (gitignored, cross-machine sync via the bound repo):
-  _index.md                       registry: slug · status · versions · last_sync
+  _index.md                       registry: slug · status · created · clone · papers
   <slug>/
     manifest.md                   YAML frontmatter (repo URL/branch/SHA, papers, status)
     design.md                     RQ + hypothesis + baselines + traces + platforms + metrics

@@ -21,6 +21,16 @@ def test_list_entries_returns_list():
     assert isinstance(result, list)
 
 
+def test_mentor_package_exposes_submodules():
+    # The skills/agents use the attribute form (mentor.past_work.X); the package
+    # must re-export submodules so that resolves in a fresh import.
+    import research_assistant.mentor as mentor
+
+    assert hasattr(mentor.past_work, "compose_past_work_entry")
+    assert hasattr(mentor.research_notes, "__name__")
+    assert hasattr(mentor.boss_profile, "__name__")
+
+
 def test_past_work_entry_minimal_dict():
     entry = PastWorkEntry(slug="x", title="Title")
     assert entry.slug == "x"

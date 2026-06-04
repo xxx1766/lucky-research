@@ -116,6 +116,13 @@ recommendation and surfaces the natural next call (`/figure new <slug>`).
 
 ## `/figure new` 6-step flow
 
+**Collision guard (before Step 1).** After scope is resolved, check whether the
+target figures dir already holds `<slug>.note.md` (or `<slug>.svg` / `plot_<slug>.py`).
+If so and the user did **not** pass `--force`, refuse with
+`figure '<slug>' already exists in <scope> — pass --force to overwrite` and stop
+(matches the Error-policy row). With `--force`, proceed and overwrite. Without
+this guard the render steps silently overwrite an existing figure.
+
 **Step 0 — scope** (only if `AmbiguousScopeError`)
 Ask in plain text (per memory rule on multi-option research picks): "Paper or experiment?" — accept `paper` / `experiment`. Persist only to this invocation.
 
@@ -183,7 +190,7 @@ For **kind=structural**:
 3. Write `<slug>.svg` to the resolved figures dir.
 4. Call `figures.export.export(svg_path)`. On `ExportError`, leave the SVG and tell the user to inspect.
 5. Write `<slug>.note.md` via `figures.note.write_note(note_path, FigureNote(...), body="")`.
-6. If `scope == "experiment"`, call `research_assistant.experiments.append_figures_to_version(slug=<exp-slug>, version=<vN.M>, figure_stems=["repo/figures/<vN.M>/<slug>"])`.
+6. If `scope == "experiment"`, call `research_assistant.experiments.append_figures_to_version(slug=<exp-slug>, version=<vN.M>, figure_stems=["repo/figures/_arch/<slug>"])`. Structural figures are **non-versioned** — they live under `repo/figures/_arch/` (see `experiment_figures_dir(slug, version=None)`), so the link-back stem must use `_arch/`, not `<vN.M>/` (that form is only correct for the data branch).
 7. Print the LaTeX include snippet (see "Insert snippet" below).
 
 For **kind=data**:

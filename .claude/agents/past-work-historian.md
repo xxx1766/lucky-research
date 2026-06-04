@@ -1,6 +1,6 @@
 ---
 name: past-work-historian
-description: Curates and surfaces the user's prior research/projects. Source of truth is `inputs/past-work/*.md`; indexed copy lives in AgentDB namespace `project/past-work/`. Use during /paper direction discussions, /past-work commands, or whenever the user says "have I done something like this before".
+description: Curates and surfaces the user's prior research/projects. Source of truth is `inputs/past-work/*.md`; indexed copy lives in AgentDB namespace `project/past-work` (key = slug). Use during /paper direction discussions, /past-work commands, or whenever the user says "have I done something like this before".
 ---
 
 # past-work-historian
@@ -14,7 +14,7 @@ description: Curates and surfaces the user's prior research/projects. Source of 
 | `inputs/past-work/<slug>/paper/` | **Optional archived paper** — full `outputs/papers/<venue>/<direction>/` tree relocated by `/paper archive`. Same companion folder as the optional clone. |
 | `inputs/past-work/<slug>/notes/` | **Optional extras** — slides, screenshots, datasets the user wants next to the entry without putting them in the repo. |
 | `docs/past-work-template.md` | **Shared template** — committed. Copy + fill when adding a new entry. |
-| AgentDB `project/past-work/<slug>` | **Indexed mirror** — vector-indexed for semantic recall. Rebuilt by `/past-work sync` or after `/past-work add`. |
+| AgentDB namespace `project/past-work`, key `<slug>` | **Indexed mirror** — vector-indexed for semantic recall. Rebuilt by `/past-work sync`, `/migrate reindex`, or after `/past-work add`. (Namespace + key match what `migrate/reindex.py` writes, so a reindex overwrites the same record rather than duplicating it.) |
 
 Helper module: `src/research_assistant/mentor/past_work.py` exposes
 `PastWorkEntry`, `PastWorkRepo`, `slugify`, `next_available_slug`,
@@ -34,7 +34,7 @@ Helper module: `src/research_assistant/mentor/past_work.py` exposes
 ## Workflows
 
 ### Recall (the historian's main job)
-1. Call `mcp__claude-flow__memory_search` over namespace `project/past-work/` with the
+1. Call `mcp__claude-flow__memory_search` over namespace `project/past-work` with the
    user's direction or topic as the query.
 2. For each hit return `{title, year, venue, status, repo (if bound), one-line "what I learned"}`.
    Mention the repo URL if the entry has a `repo:` block — the user often wants
@@ -50,11 +50,23 @@ Helper module: `src/research_assistant/mentor/past_work.py` exposes
    now (`clone_repo(slug)`) or leave as `tracked` for later.
 3. Compose a markdown file matching `docs/past-work-template.md`.
 4. Write to `inputs/past-work/<slug>.md`.
-5. Index in AgentDB: `mcp__claude-flow__memory_store(**mentor.past_work.to_agentdb_payload(mentor.past_work.parse_entry(path)))`.
-   The payload is a flat dict (`namespace=project/past-work, key=<slug>,
-   value=<embeddable text>, metadata=<dict>`) — matches the shape every
-   other `*_to_agentdb_payload` helper returns. **Do not** hand-serialize
-   YAML for `value`; use the helper.
+5. Index in AgentDB. `to_agentdb_payload(entry)` returns a **flat metadata
+   dict** (slug/title/year/venue/status/tags/links/what_i_learned) — it is the
+   `metadata=` argument, NOT the whole call. Use it like this (matching
+   `migrate/reindex.py` so a later reindex overwrites rather than duplicates):
+
+   ```python
+   entry = mentor.past_work.parse_entry(path)
+   mcp__claude-flow__memory_store(
+       namespace="project/past-work",
+       key=entry.slug,
+       value=f"{entry.title}. " + "; ".join(entry.what_i_learned),  # embeddable text
+       metadata=mentor.past_work.to_agentdb_payload(entry),
+   )
+   ```
+
+   **Do not** splat the payload as `**kwargs` — it has no `namespace`/`key`/
+   `value` fields and the call would misfile.
 
 ### Sync (driven by `/past-work sync`)
 1. Walk `inputs/past-work/*.md` via `list_entries()`.

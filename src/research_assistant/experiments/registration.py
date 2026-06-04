@@ -124,6 +124,7 @@ def register_version(
     description: str,
     *,
     kind: Literal["major", "minor"] = "minor",
+    status: Literal["planned", "running", "completed", "failed", "abandoned"] = "completed",
     config: str | None = None,
     result_in_repo: str | None = None,
     seeds: list[int] | None = None,
@@ -140,6 +141,10 @@ def register_version(
     canonical suggestion source; this function accepts any well-formed
     ``vN.M`` so callers can deliberately skip numbers (e.g. ``v1.3`` -> ``v3.0``).
 
+    ``status`` records the run outcome (default ``"completed"``); pass
+    ``"failed"`` / ``"abandoned"`` / ``"running"`` / ``"planned"`` to register a
+    non-successful or in-flight run without hand-editing the version file.
+
     ``started_at`` / ``finished_at`` are ISO-8601 strings the caller may pass
     when the run-time is known (e.g. CI captures both). When ``finished_at``
     is omitted the registration moment is used as a best-effort proxy — the
@@ -149,6 +154,9 @@ def register_version(
     parse_semver(version)
     if kind not in ("major", "minor"):
         raise ValueError(f"unknown version kind: {kind!r}")
+    _allowed_status = ("planned", "running", "completed", "failed", "abandoned")
+    if status not in _allowed_status:
+        raise ValueError(f"unknown version status: {status!r}")
     out_path = version_path(slug, version)
     if out_path.exists() and not force:
         suggestion = next_version(slug, "minor")
@@ -182,7 +190,7 @@ def register_version(
         "version": version,
         "description": description,
         "kind": kind,
-        "status": "completed",
+        "status": status,
         "commit_sha": commit_sha,
         "config_snapshot": config,
         "result_file": result_in_repo,

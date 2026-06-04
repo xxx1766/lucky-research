@@ -17,8 +17,11 @@ description: Curates the user's "big boss" (大老板 / group PI) profile and me
 | `docs/boss-meeting-template.md` | **Shared template** — committed. Copy + fill on every `/boss meeting`. |
 | `docs/boss-report-template.md` | **Shared template** — committed. Reference shape for files under `reports/`. |
 | `docs/boss-rehearsal-template.md` | **Shared template** — committed. Output shape for files under `rehearsals/`. |
-| AgentDB `project/boss/profile` | **Indexed mirror** of the profile. Rebuilt by `/boss sync`. |
-| AgentDB `project/boss/meetings/<date>` | **Indexed mirror** of each meeting. Rebuilt by `/boss sync`. |
+| AgentDB namespace `project/boss`, key `profile` | **Indexed mirror** of the profile. Rebuilt by `/boss sync` or `/migrate reindex`. |
+| AgentDB namespace `project/boss/meetings`, key `<date>` | **Indexed mirror** of each meeting (key is the meeting date). Rebuilt by `/boss sync` or `/migrate reindex`. |
+
+> Namespace + key match `migrate/reindex.py` exactly, so a reindex overwrites
+> the same records rather than creating duplicates.
 
 Helper module: `src/research_assistant/mentor/boss_profile.py` exposes `BossProfile`,
 `BossMeeting`, `meeting_slug`, `list_meetings`, `recent_meetings`, `list_reports`,
@@ -151,8 +154,12 @@ Triggered by `/boss sync`.
 
 1. Walk `inputs/boss-profile/profile.md` and `list_meetings()`.
 2. Parse each via `parse_profile` / `parse_meeting`.
-3. Upsert each into AgentDB under `project/boss/profile` and
-   `project/boss/meetings/<date>` via `mcp__claude-flow__memory_store`.
+3. Upsert via `mcp__claude-flow__memory_store`, using `to_agentdb_payload(...)`
+   as the `metadata=` argument (a short search string is the `value=`):
+   - profile → `namespace="project/boss", key="profile"`
+   - each meeting → `namespace="project/boss/meetings", key="<date>"`
+   These namespace/key pairs match `migrate/reindex.py`, so `/migrate reindex`
+   overwrites the same records instead of duplicating them.
 
 ## Schemas (YAML frontmatter)
 

@@ -233,3 +233,16 @@ def weekly_checkin_template(today: date) -> str:
         f"- [ ] \n"
         f"- [ ] \n"
     )
+
+
+# Re-export submodules so the attribute form documented across the skills /
+# agents (``mentor.past_work.X``, ``mentor.research_notes.X``,
+# ``mentor.boss_profile.X``) resolves in a fresh process without the caller
+# first importing the submodule. Placed at the bottom so the helpers above are
+# already defined when the submodules load.
+from research_assistant.mentor import (  # noqa: E402,F401
+    boss_profile,
+    past_work,
+    past_work_capture,
+    research_notes,
+)

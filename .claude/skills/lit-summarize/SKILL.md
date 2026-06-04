@@ -21,9 +21,10 @@ description: Summarize research papers (PDF or arXiv) into structured markdown (
 3. **Pull canonical BibTeX (when input is a DOI or the PDF has a DOI in metadata)** —
    call `research_assistant.lit.publisher_bibtex.fetch_bibtex_from_publisher(doi)`.
    It tries CrossRef → doi.org content negotiation → CloakBrowser stealth fallback
-   (last tier needs `pip install -e ".[crawl]"`). The returned BibTeX is stored
-   alongside the summary so `/cite` can later resolve `\cite{slug}` without a
-   second network round-trip.
+   (last tier needs `pip install -e ".[crawl]"`). Stash the returned BibTeX
+   string in the AgentDB record's `metadata.bibtex` field (step 6) so `/cite`
+   can resolve `\cite{slug}` from it without a second network round-trip. If no
+   DOI is known, skip — `/cite` re-fetches on demand.
 4. **Summarize** — Claude produces a structured markdown with sections:
    `Problem`, `Method`, `Results`, `Contribution`, `Limitations`, `Related work pointers`.
 5. **Persist** — write to `outputs/summaries/<slug>.md`.
@@ -31,9 +32,10 @@ description: Summarize research papers (PDF or arXiv) into structured markdown (
    - tool: `mcp__claude-flow__memory_store`
    - namespace: `papers`
    - key: paper slug
-   - value: the summary markdown (vector-indexed automatically). When step 3
-     produced a BibTeX entry, include it in the payload's metadata so `/cite`
-     can read it back.
+   - value: the summary markdown (vector-indexed automatically).
+   - metadata: `{"doi": <doi-or-null>, "arxiv_id": <id-or-null>,
+     "bibtex": <entry-string-or-null>}` — when step 3 produced a BibTeX entry,
+     put it in `metadata.bibtex` so `/cite` reads it back instead of re-fetching.
 
 ## Outputs
 

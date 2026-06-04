@@ -338,12 +338,51 @@ def list_entries_with_repo() -> list[tuple[Path, PastWorkRepo | None, bool]]:
 
 # ---------- parsers + AgentDB payload ----------
 
+def _body_section(body: str, heading: str) -> str:
+    """Return the text under a ``## <heading>`` section (until the next ``## ``).
+
+    The past-work template + :func:`compose_past_work_entry` put ``Abstract`` and
+    ``What I learned`` in the *body*, not the frontmatter, so the on-disk body is
+    the source of truth for those fields. Heading match is case-insensitive.
+    """
+    out: list[str] = []
+    capturing = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if capturing:
+                break
+            capturing = stripped[3:].strip().lower() == heading.lower()
+            continue
+        if capturing:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
+def _body_bullets(section_text: str) -> list[str]:
+    """Bullet items under a section, skipping ``_TODO_`` placeholders."""
+    items: list[str] = []
+    for line in section_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if item and not item.startswith("_TODO_"):
+                items.append(item)
+    return items
+
+
 def parse_entry(path: Path) -> PastWorkEntry:
     """Parse a past-work markdown file (YAML frontmatter + body) into a PastWorkEntry.
 
     Falls back to the filename stem for ``slug`` when the frontmatter omits it
     (matches the convention that ``inputs/past-work/<slug>.md`` is the slug).
     Body below the closing fence is stored verbatim in :attr:`PastWorkEntry.body`.
+
+    ``abstract`` and ``what_i_learned`` are recovered from the body's
+    ``## Abstract`` / ``## What I learned`` sections when the frontmatter omits
+    them — the template and :func:`compose_past_work_entry` write those into the
+    body, so without this the AgentDB index value (which uses
+    ``what_i_learned``) was always empty.
     """
     from research_assistant.common.frontmatter import parse as parse_fm
 
@@ -351,6 +390,14 @@ def parse_entry(path: Path) -> PastWorkEntry:
     data.setdefault("slug", Path(path).stem)
     data.setdefault("title", data["slug"])
     data.setdefault("body", body)
+    if not data.get("abstract"):
+        abstract = _body_section(body, "Abstract")
+        if abstract and not abstract.startswith("_TODO_"):
+            data["abstract"] = abstract
+    if not data.get("what_i_learned"):
+        learned = _body_bullets(_body_section(body, "What I learned"))
+        if learned:
+            data["what_i_learned"] = learned
     return PastWorkEntry.model_validate(data)
 
 

@@ -20,7 +20,10 @@ Target: `outputs/papers/<venue>/<direction>/refs.bib`.
 
 1. Walk `main.tex` + `sections/*.tex` for `\cite{<slug>}` keys via
    `research_assistant.refs.scan_tex_cite_keys`.
-2. For each slug, look up `papers/<slug>` in AgentDB to get bibinfo.
+2. For each slug, look up `papers/<slug>` in AgentDB. If its
+   `metadata.bibtex` field is populated (lit-summarize stores it there when a
+   DOI was known), use that canonical entry directly — no network. Otherwise
+   fall through to step 3.
 3. **If a slug has no AgentDB entry** but the user knows the DOI: call
    `research_assistant.lit.publisher_bibtex.fetch_bibtex_from_publisher(doi)`
    to fetch the canonical BibTeX (tries CrossRef → doi.org content

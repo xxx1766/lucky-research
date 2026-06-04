@@ -88,9 +88,16 @@ check-in.
    - `mentor.past_work.bind_repo(slug, url)` writes the `repo:` frontmatter.
    - Plain-text Y/N: `"Clone the repo locally now? [y/N]"`. On `y`, call
      `mentor.past_work.clone_repo(slug)`. On `N`, leave it `tracked`.
-6. `mcp__claude-flow__memory_store(namespace="project/past-work", key=slug,
-   value=mentor.past_work.to_agentdb_payload(parse_entry(path)))` so the
-   `past-work-historian` agent can recall it during `/paper direction` etc.
+6. Index it — `to_agentdb_payload(entry)` is the `metadata=`, not the whole
+   call (it has no namespace/key/value fields). Match `migrate/reindex.py`'s
+   shape so a later reindex overwrites the same record:
+   ```
+   entry = parse_entry(path)
+   mcp__claude-flow__memory_store(namespace="project/past-work", key=entry.slug,
+       value=f"{entry.title}. " + "; ".join(entry.what_i_learned),
+       metadata=mentor.past_work.to_agentdb_payload(entry))
+   ```
+   so the `past-work-historian` agent can recall it during `/paper direction` etc.
 7. Print one line: `"captured: <slug> → inputs/past-work/<slug>.md"`. Hand
    back to the prior mentor flow if one was in progress.
 

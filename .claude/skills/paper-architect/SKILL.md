@@ -549,6 +549,11 @@ top-level branches are:
 (tectonic → latexmk, missing-toolchain hint, last-40-log on failure, never
 undo the write) is in `write-workflow.md`.
 
+**Drift snapshot** — after a successful write, store a lightweight outline
+snapshot to AgentDB `drafts/<venue>/<direction>` (exact `memory_store` call in
+`write-workflow.md`). The `/mentor` weekly check-in reads `drafts/*` to flag a
+paper that's gone quiet; this write is what keeps that signal non-empty.
+
 After everything above (whether the render fired or not), print the footer
 with the debt roll-up:
 `render_progress_footer(venue, direction, stage_status(direction_dir), debt_summary(direction_dir))`.

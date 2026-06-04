@@ -152,15 +152,18 @@ helper and emits one `{namespace, key, value, metadata}` dict per record
 as JSONL on stdout. The calling skill prompt reads the JSONL and pipes
 each line into `mcp__claude-flow__memory_store(**payload)`. Coverage:
 
-| Namespace | Truth source |
-|---|---|
-| `project/past-work/<slug>` | `inputs/past-work/<slug>.md` |
-| `project/experiments/<slug>` | `outputs/experiments/<slug>/manifest.md` |
-| `project/experiments/<slug>/versions` | `outputs/experiments/<slug>/versions/<vN.M>.md` |
-| `ideas/<slug>` | `outputs/idea-checks/<slug>/idea.md` |
-| `project/boss/profile` | `inputs/boss-profile/profile.md` |
-| `project/boss/meetings` | `inputs/boss-profile/meetings/<date>.md` |
-| `project/research-notes/<slug>` | `outputs/research-notes/<slug>/state.yaml` |
+| Namespace | Key | Truth source |
+|---|---|---|
+| `project/past-work` | `<slug>` | `inputs/past-work/<slug>.md` |
+| `project/experiments` | `<slug>` | `outputs/experiments/<slug>/manifest.md` |
+| `project/experiments/<slug>/versions` | `<vN.M>` | `outputs/experiments/<slug>/versions/<vN.M>.md` |
+| `ideas` | `<slug>` | `outputs/idea-checks/<slug>/idea.md` |
+| `project/boss` | `profile` | `inputs/boss-profile/profile.md` |
+| `project/boss/meetings` | `<date>` | `inputs/boss-profile/meetings/<date>.md` |
+| `project/research-notes` | `<slug>` | `outputs/research-notes/<slug>/state.yaml` |
+
+(The id lives in **key**, not the namespace — the agent/skill writers use the
+same pairs, so a reindex overwrites rather than duplicates.)
 
 `papers/<slug>` is intentionally **not** covered — re-summarizing PDFs
 via `/summarize` rebuilds it more reliably than reverse-engineering the

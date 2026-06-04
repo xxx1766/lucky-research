@@ -139,7 +139,8 @@ def test_compose_output_round_trips_through_parse_entry(fake_past_work_dir):
         slug="lora", title="LoRA notes", year=2026,
         venue="internal", status="in-progress",
         tags=["lora"], links=["github:x/y"],
-        what_i_learned=["rank 8 is usually enough"],
+        abstract="A study of low-rank adapters.",
+        what_i_learned=["rank 8 is usually enough", "alpha scaling matters"],
     )
     entry = parse_entry(path)
     assert entry.slug == "lora"
@@ -149,6 +150,19 @@ def test_compose_output_round_trips_through_parse_entry(fake_past_work_dir):
     assert entry.status == "in-progress"
     assert entry.tags == ["lora"]
     assert entry.links == ["github:x/y"]
+    # abstract + what_i_learned live in the body; parse_entry must recover them
+    # (they feed the AgentDB index value via to_agentdb_payload).
+    assert entry.what_i_learned == ["rank 8 is usually enough", "alpha scaling matters"]
+    assert entry.abstract == "A study of low-rank adapters."
+
+
+def test_parse_entry_skips_todo_placeholders(fake_past_work_dir):
+    # An entry left with default _TODO_ placeholders must parse to empty, not
+    # capture the placeholder text into the index.
+    path = compose_past_work_entry(slug="bare", title="Bare")
+    entry = parse_entry(path)
+    assert entry.what_i_learned == []
+    assert entry.abstract is None
 
 
 def test_compose_omits_optional_frontmatter_fields_when_None(fake_past_work_dir):

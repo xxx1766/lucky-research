@@ -37,11 +37,12 @@ Invoke the `experiment-runner` skill in the stage matching `$ARGUMENTS`.
 - `/experiment clone [<slug>]` — `git clone --branch <branch> --depth 1` into
   `outputs/experiments/<slug>/repo/`. Idempotent: refuses if `repo/` already exists.
 - `/experiment version add <vN.M> --description "..." [--kind major|minor]
-  [--result <path-in-bound-repo>] [--config <path>] [--seeds ...]
-  [--metrics k=v,...] [--notes "..."]` — capture env (host/OS/python/cuda/gpu/
-  libraries), bound-repo commit SHA, optional config snapshot, and (if `--result`
-  given) mirror the result file into `results/<vN.M>/`. Refuses overwrite — suggests
-  the next semver.
+  [--status planned|running|completed|failed|abandoned] [--result <path-in-bound-repo>]
+  [--config <path>] [--seeds ...] [--metrics k=v,...] [--notes "..."]` — capture env
+  (host/OS/python/cuda/gpu/libraries), bound-repo commit SHA, optional config snapshot,
+  and (if `--result` given) mirror the result file into `results/<vN.M>/`. `--status`
+  defaults to `completed`; use it to record a failed/abandoned/in-flight run. Refuses
+  overwrite — suggests the next semver.
 - `/experiment version list` — semver-sorted table with status + metrics + commit_sha.
 - `/experiment data add <data-slug> --category <c> --path <p>
   [--size <s>] [--sha256 <h>] [--produced-by <vN.M>] [--produced-on <host>]

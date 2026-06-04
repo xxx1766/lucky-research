@@ -23,6 +23,7 @@ def write_note(path: Path, note: PseudocodeNote, *, body: str = "") -> None:
     text = f"---\n{yaml_text}\n---\n"
     if body:
         text += f"\n{body.rstrip()}\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
 

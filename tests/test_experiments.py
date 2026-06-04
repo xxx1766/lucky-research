@@ -680,6 +680,30 @@ def test_register_version_writes_file(tmp_path, monkeypatch):
     assert "python: 3.12.0" in text
 
 
+def test_register_version_default_status_completed(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _stub_env_and_pip(monkeypatch)
+    experiment_path("exp").mkdir()
+    p = register_version("exp", "v1.0", "baseline run")
+    assert "status: completed" in p.read_text()
+
+
+def test_register_version_records_non_completed_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _stub_env_and_pip(monkeypatch)
+    experiment_path("exp").mkdir()
+    p = register_version("exp", "v1.0", "crashed at epoch 3", status="failed")
+    assert "status: failed" in p.read_text()
+
+
+def test_register_version_rejects_unknown_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(experiments, "EXPERIMENTS_DIR", tmp_path)
+    _stub_env_and_pip(monkeypatch)
+    experiment_path("exp").mkdir()
+    with pytest.raises(ValueError, match="unknown version status"):
+        register_version("exp", "v1.0", "x", status="bogus")
+
+
 def test_register_version_preserves_newlines_in_description(tmp_path, monkeypatch):
     """Multi-line description / notes must survive round-trip through the
     YAML frontmatter writer + `parse_version` reader. Previously the inline

@@ -27,6 +27,16 @@ pre-fill contract.
    `ideas/<direction>/{socratic,evaluation}` for the hypothesis tree and
    pre-registration:
 
+   > **Rebuild the models first.** Those AgentDB values were stored by
+   > idea-validate as `trace.model_dump()` / `ev.model_dump()` — i.e. plain
+   > dicts. The seed functions below take the **pydantic objects**, so
+   > reconstruct them before calling:
+   > `trace = SocraticTrace(**socratic_payload)` (from
+   > `research_assistant.ideas.socratic`) and
+   > `ev = IdeaEvaluation(**evaluation_payload)` (from
+   > `research_assistant.ideas.evaluate`). Passing the raw dict raises
+   > `AttributeError`.
+
    - **Hypothesis tree.** Call
      `research_assistant.ideas.socratic.to_experiment_hypothesis_seed(trace)`
      and paste the returned Markdown into `## Hypothesis` instead of the

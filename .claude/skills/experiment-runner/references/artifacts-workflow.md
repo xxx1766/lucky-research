@@ -7,8 +7,9 @@ can exclude them and instead record their re-fetch commands in the
 migration archive's `MANIFEST.json`.
 
 All three subcommands shell out to `python -m research_assistant.migrate
-artifacts <op> --slug <current-slug>` (the cursor is resolved by the skill
-body, not by the CLI).
+artifacts --slug <current-slug> <op>` — `--slug` is on the `artifacts` parser
+and must precede the `list`/`register`/`scan` sub-op (op-first fails argparse).
+The cursor is resolved by the skill body, not by the CLI.
 
 ## `/experiment artifacts list`
 
@@ -50,8 +51,8 @@ out:
    | `other` | `# TODO: fetch <repo> into <experiment>/<path>` (with a `# revision: <rev>` comment when given) — the manual command the user will need to write is one edit away rather than blank |
    | No `--repo` at all | Manual-fill-in placeholder |
 
-5. Shell out: `python -m research_assistant.migrate artifacts register
-   --slug <slug> --name <name> --path <path> ...`.
+5. Shell out: `python -m research_assistant.migrate artifacts --slug <slug>
+   register --name <name> --path <path> ...`.
 6. Print the resulting file path.
 
 ## `/experiment artifacts scan [--threshold <bytes>]`
@@ -60,7 +61,7 @@ Walk the current experiment's directory, prompt the user about every
 file ≥ threshold (default 1 GiB) that isn't already covered by an
 entry. Same prompt as the `/migrate export` flow uses, reachable
 proactively rather than only at export time. Shells out to
-`python -m research_assistant.migrate artifacts scan --slug <slug>`.
+`python -m research_assistant.migrate artifacts --slug <slug> scan`.
 
 ## Composition with `/migrate`
 

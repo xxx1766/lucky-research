@@ -205,6 +205,23 @@ Rules:
    (`brew install tectonic` / `cargo install tectonic` /
    `apt install texlive-latex-extra`) and skip the render.
 
+**Drift snapshot (for the mentor).** After a successful write, refresh the
+lightweight outline snapshot the weekly check-in reads as a paper-activity
+signal:
+
+```
+mcp__claude-flow__memory_store(
+    namespace="drafts", key=f"{venue}/{direction}",
+    value=<outline.md contents, or the section list + \title{} if no outline yet>,
+    metadata={"venue": venue, "direction": direction,
+              "sections": [<section names written>]},
+)
+```
+
+`research-mentor`'s `/mentor` check-in searches `drafts/*` to detect a paper
+that's been quiet; without this write that signal is always empty. Skip it only
+if AgentDB is unreachable (warn once, continue).
+
 After everything above (whether the render fired or not), print the footer
 **with the debt roll-up** so any tokens just opened are visible:
 `render_progress_footer(venue, direction, stage_status(direction_dir), debt_summary(direction_dir))`.

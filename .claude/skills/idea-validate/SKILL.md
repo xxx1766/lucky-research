@@ -89,7 +89,10 @@ being stress-tested. Apply these rules across all stages:
 At every `/idea-check ...` invocation that isn't `list` or `show <slug>`:
 
 * `mcp__claude-flow__memory_retrieve` namespace=`project`, key=`idea-context.current`
-  → expect `{"slug": "...", "area_tags": [...], "venue": "...", "stage": "..."}` or absent.
+  → expect `{"slug": "...", "area_tags": [...]}` or absent. (The manifest — read
+  via `registry` / `status` — is the source of truth for the current stage and
+  the chosen venue; the cursor only carries the slug + tags, which is all
+  downstream stages need to locate the idea folder.)
 * If absent and the subcommand needs an active idea (`scout`/`evaluate`/`venues`/
   `knowledge`/`handoff`/`status`/`horizontal`/`vertical`), tell the user:
   `Run /idea-check "<your idea>" first to capture it.`
@@ -296,10 +299,13 @@ venues first.
    `venues.md`. Show the table.
 3. Ask plain text: `选一个 venue (输入 slug,或者输入新的 venue 让我加注册表)`.
 4. Persist:
-   - `registry.update_idea(slug, venue=<picked>, status="venued")`.
+   - `registry.update_idea(slug, venue=<picked>, status="venued")` — the
+     manifest is the source of truth for the chosen venue.
    - `mcp__claude-flow__memory_store` namespace=`ideas`, key=`<slug>/venues`
-     with `[m.model_dump() for m in matches]` plus `{"picked": <slug>}`.
-   - Refresh `project/idea-context.current` to include `venue: <picked>`.
+     with `[m.model_dump(mode="json") for m in matches]` plus
+     `{"picked": <slug>}`. Use `mode="json"` so `next_deadline` (a `date`)
+     serializes to an ISO string — a raw `model_dump()` keeps `date` objects and
+     `json.dumps` would raise.
 
 ## Stage 5 — Knowledge (brain-library index)
 

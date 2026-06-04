@@ -43,6 +43,14 @@ def test_overwrites(tmp_path: Path):
     assert "first" not in path.read_text()
 
 
+def test_write_note_creates_missing_parent(tmp_path: Path):
+    # Parity with figures.note.write_note: writing into a not-yet-existing dir
+    # must create it rather than raising FileNotFoundError.
+    path = tmp_path / "algorithms" / "v1.0" / "x.note.md"
+    pn.write_note(path, _sample(), body="hi")
+    assert path.is_file()
+
+
 def test_rejects_no_frontmatter(tmp_path: Path):
     path = tmp_path / "bad.note.md"
     path.write_text("no frontmatter here\n")

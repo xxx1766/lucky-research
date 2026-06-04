@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 FigureKind = Literal["structural", "data", "mixed"]
 FigureScope = Literal["paper", "experiment"]
-FigureBackend = Literal["raw-svg", "d2-scaffolded", "matplotlib"]
+FigureBackend = Literal["raw-svg", "d2-scaffolded", "matplotlib", "trajectory-svg"]
 SizePreset = Literal[
     "single-column", "double-column-half", "double-column-full", "custom"
 ]

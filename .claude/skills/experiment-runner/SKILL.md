@@ -98,7 +98,7 @@ Helpers (all in `research_assistant.experiments`):
 
 ```
 outputs/experiments/
-  _index.md                            ← auto-rebuilt registry (slug | status | versions | last_sync | last_feasibility)
+  _index.md                            ← auto-rebuilt registry (Slug | Status | Created | Clone | Papers)
   <slug>/
     manifest.md                        ← YAML frontmatter + body (see docs/experiment-manifest-template.md)
     designs/<dN.M>.md                  ← versioned design plans (d1.0, d1.1, d2.0 ...; latest is current)
@@ -253,7 +253,11 @@ network):
 - `<vN.M>` — semver version slug. Suggest via `next_version(slug, kind)`; user may
   pass an explicit number to deliberately skip (e.g. `v1.3` → `v3.0`).
 - `--description "..."` — required user-supplied label.
-- `--kind major|minor` — informational.
+- `--kind major|minor` — records the bump intent **and** drives the
+  `next_version(slug, kind)` suggestion (not purely informational).
+- `--status planned|running|completed|failed|abandoned` — run outcome, default
+  `completed`. Pass `register_version(..., status="failed")` to record a
+  non-successful or in-flight run without hand-editing the version file.
 - `--result <path-in-bound-repo>` — relative path to the structured result file;
   mirrored into `results/<vN.M>/`.
 - `--config <path>` — config snapshot path (relative to experiment folder).
@@ -305,8 +309,10 @@ that are reproducible from outside sources are recorded in
 `outputs/experiments/<slug>/external-artifacts.md` so `/migrate export`
 can exclude them and record their re-fetch commands in the archive's
 `MANIFEST.json`. The three subcommands all shell out to
-`python -m research_assistant.migrate artifacts <op> --slug <slug>` (the
-cursor is resolved by the skill body, not the CLI).
+`python -m research_assistant.migrate artifacts --slug <slug> <op>` — `--slug`
+lives on the `artifacts` parser and so must come **before** the
+`list`/`register`/`scan` sub-op (op-first fails argparse). The cursor is
+resolved by the skill body, not the CLI.
 
 Full detail (CLI shapes, the `--fetch-cmd` synthesis ladder per
 `--source`, composition with `/migrate export`) in
