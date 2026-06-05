@@ -37,9 +37,14 @@ DEBT_BY_TOKEN: dict[str, str] = {
     "CLAIM_UNVERIFIED": "evidence",
 }
 
-# `[TOKEN]` or `[TOKEN: free-form hint]`
+# `[TOKEN]` or `[TOKEN: free-form hint]`.
+# The underscore in every token name is LaTeX-special, so a token written into
+# a `.tex` source must escape it (`DATA\_NEEDED`) to compile. Match both the
+# bare and the backslash-escaped form so a rendered debt is still tracked; the
+# captured token is normalised (backslashes stripped) before the debt lookup.
+_TOKEN_ALT = "|".join(name.replace("_", r"\\?_") for name in DEBT_BY_TOKEN)
 _TOKEN_RE = re.compile(
-    r"\[(" + "|".join(DEBT_BY_TOKEN) + r")(?::\s*(.*?))?\s*\]"
+    r"\[(" + _TOKEN_ALT + r")(?::\s*(.*?))?\s*\]"
 )
 
 
@@ -150,7 +155,7 @@ def scan_placeholders(direction_dir: Path) -> list[Placeholder]:
         for lineno, raw_line in enumerate(text.splitlines(), start=1):
             stripped = _strip_tex_comment(raw_line)
             for m in _TOKEN_RE.finditer(stripped):
-                token = m.group(1)
+                token = m.group(1).replace("\\", "")  # normalise `DATA\_NEEDED`
                 hint = (m.group(2) or "").strip()
                 found.append(
                     Placeholder(
