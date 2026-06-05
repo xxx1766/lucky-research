@@ -166,8 +166,18 @@ def next_suggested(status: StageStatus) -> str:
     return "all stages complete — ready to submit"
 
 
+#: Total number of pipeline stages (venue → render). Public so aggregators
+#: (e.g. the dashboard) can render a percentage without importing ``_BAR_WIDTH``.
+STAGE_COUNT = _BAR_WIDTH
+
+
+def stages_completed(status: StageStatus) -> int:
+    """Count how many of the 7 pipeline stages are fully done for a direction."""
+    return sum(1 for s in _STAGES if _stage_done(s, status))
+
+
 def _progress_bar(status: StageStatus) -> tuple[str, int]:
-    done = sum(1 for s in _STAGES if _stage_done(s, status))
+    done = stages_completed(status)
     bar = "#" * done + "-" * (_BAR_WIDTH - done)
     return bar, done
 
