@@ -169,8 +169,18 @@ def next_suggested(s: ExperimentStatus) -> str:
     return "/experiment analyze"
 
 
+#: Total number of experiment stages (init → analyze). Public so aggregators
+#: (e.g. the dashboard) can render a percentage without importing ``_BAR_WIDTH``.
+STAGE_COUNT = _BAR_WIDTH
+
+
+def stages_completed(s: ExperimentStatus) -> int:
+    """Count how many of the 5 experiment stages are fully done."""
+    return sum(1 for st in _STAGES if _stage_done(st, s))
+
+
 def _progress_bar(s: ExperimentStatus) -> tuple[str, int]:
-    done = sum(1 for st in _STAGES if _stage_done(st, s))
+    done = stages_completed(s)
     return "#" * done + "-" * (_BAR_WIDTH - done), done
 
 

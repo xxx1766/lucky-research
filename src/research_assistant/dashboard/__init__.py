@@ -28,6 +28,7 @@ from research_assistant.dashboard.outline_budget import parse_page_budget
 from research_assistant.dashboard.venue_meta import VenueMeta, parse_venue_meta
 from research_assistant.papers import (
     STAGE_COUNT,
+    next_suggested,
     stage_status,
     stages_completed,
     tex_files,
@@ -44,9 +45,11 @@ __all__ = [
     "IdeaRow",
     "PaperRow",
     "SectionRow",
+    "ExperimentRow",
     "DashboardData",
     "collect_ideas",
     "collect_papers",
+    "collect_experiments",
     "collect",
     "build_dashboard",
 ]
@@ -83,6 +86,8 @@ class PaperRow:
     # Page-budget progress (set only when outline.md has a budget table).
     pages_written: float | None = None  # Σ(planned_pages × fill)
     pages_total: float | None = None    # Σ(planned_pages)
+    next_step: str = ""                 # recommended next slash-command
+    updated: date | None = None         # newest write-surface file mtime
 
     @property
     def stages_total(self) -> int:
@@ -129,12 +134,35 @@ class IdeaRow:
     statement: str
 
 
+@dataclass(frozen=True)
+class ExperimentRow:
+    """One experiment under ``outputs/experiments/<slug>/``."""
+
+    slug: str
+    title: str
+    status: str                 # active / paused / archived / abandoned
+    stages_done: int
+    stages_total: int
+    versions: int
+    repo: str                   # bound repo URL ("" if none)
+    papers: tuple[str, ...]     # bound paper slugs
+    next_step: str
+    updated: date | None
+
+    @property
+    def percent(self) -> int:
+        if self.stages_total == 0:
+            return 0
+        return round(100 * self.stages_done / self.stages_total)
+
+
 @dataclass
 class DashboardData:
     """Everything the renderer needs."""
 
     ideas: list[IdeaRow] = field(default_factory=list)
     papers: list[PaperRow] = field(default_factory=list)
+    experiments: list[ExperimentRow] = field(default_factory=list)
     generated_on: date | None = None
 
 
@@ -153,6 +181,39 @@ def _word_count(tex: Path) -> int:
     for line in text.splitlines():
         total += len(_COMMENT_RE.sub("", line).split())
     return total
+
+
+def _latest_mtime(paths) -> date | None:
+    """Newest mtime (as a ``date``) across an iterable of files. ``None`` if none
+    exist. Callers pass an explicit file list (never an rglob of a whole dir) so
+    a symlinked direction or an experiment's ``repo/`` clone can't blow this up."""
+    newest: float | None = None
+    for p in paths:
+        try:
+            m = p.stat().st_mtime
+        except OSError:
+            continue
+        if newest is None or m > newest:
+            newest = m
+    if newest is None:
+        return None
+    try:
+        return date.fromtimestamp(newest)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _direction_mtime(direction_dir: Path) -> date | None:
+    """Staleness signal: newest mtime across a direction's *writing surface*
+    (outline, main.tex, refs.bib, drafted sections) — not the whole tree."""
+    candidates = [
+        direction_dir / "outline.md",
+        direction_dir / "main.tex",
+        direction_dir / "focused-problem.md",
+        direction_dir / "refs.bib",
+        *tex_files(direction_dir),
+    ]
+    return _latest_mtime(candidates)
 
 
 def collect_ideas() -> list[IdeaRow]:
@@ -263,6 +324,7 @@ def collect_papers(papers_dir: Path | None = None) -> list[PaperRow]:
                     deadline_text=meta.deadline_text,
                     deadline_date=meta.deadline_date,
                     stages_done=1,  # venue set, no direction yet
+                    next_step="/paper direction <slug>",
                 )
             )
             continue
@@ -282,8 +344,72 @@ def collect_papers(papers_dir: Path | None = None) -> list[PaperRow]:
                     sections=sections,
                     pages_written=pages_written,
                     pages_total=pages_total,
+                    next_step=next_suggested(status),
+                    updated=_direction_mtime(d),
                 )
             )
+    return rows
+
+
+def collect_experiments() -> list[ExperimentRow]:
+    """Walk ``outputs/experiments/`` into one row per experiment.
+
+    Reads each ``manifest.md`` (repo / bound papers / status) and the on-disk
+    5-stage board. A manifest that fails to parse is skipped rather than
+    crashing the whole panel. Uses the package-global ``EXPERIMENTS_DIR`` (the
+    experiment helpers resolve paths through it), so empty / absent → ``[]``.
+    """
+    from research_assistant.experiments.parsers import (
+        list_experiments,
+        parse_experiment,
+    )
+    from research_assistant.experiments.paths import experiment_path
+    from research_assistant.experiments.status import (
+        STAGE_COUNT as EXP_STAGES,
+    )
+    from research_assistant.experiments.status import (
+        next_suggested as exp_next,
+    )
+    from research_assistant.experiments.status import (
+        stage_status as exp_status,
+    )
+    from research_assistant.experiments.status import (
+        stages_completed as exp_done,
+    )
+
+    rows: list[ExperimentRow] = []
+    for manifest in list_experiments():
+        slug = manifest.parent.name
+        try:
+            exp = parse_experiment(manifest)
+            title, status_str, papers = exp.title, exp.status, tuple(exp.papers)
+            repo = exp.repo.url if exp.repo else ""
+        except (ValueError, OSError):
+            title, status_str, papers, repo = slug, "active", (), ""
+        st = exp_status(slug)
+        exp_dir = experiment_path(slug)
+        version_files = (
+            sorted((exp_dir / "versions").glob("*.md"))
+            if (exp_dir / "versions").is_dir()
+            else []
+        )
+        updated = _latest_mtime(
+            [manifest, exp_dir / "design.md", exp_dir / "references.md", *version_files]
+        )
+        rows.append(
+            ExperimentRow(
+                slug=slug,
+                title=title,
+                status=status_str,
+                stages_done=exp_done(st),
+                stages_total=EXP_STAGES,
+                versions=st.version_count,
+                repo=repo,
+                papers=papers,
+                next_step=exp_next(st),
+                updated=updated,
+            )
+        )
     return rows
 
 
@@ -297,15 +423,31 @@ def _sort_papers(papers: list[PaperRow]) -> list[PaperRow]:
     return sorted(papers, key=key)
 
 
+def _sort_experiments(experiments: list[ExperimentRow]) -> list[ExperimentRow]:
+    """Active first, then most-recently-updated, then slug."""
+    order = {"active": 0, "paused": 1, "archived": 2, "abandoned": 3}
+
+    def key(e: ExperimentRow):
+        return (order.get(e.status, 9), -(e.updated or date.min).toordinal(), e.slug)
+
+    return sorted(experiments, key=key)
+
+
 def collect(papers_dir: Path | None = None, *, today: date | None = None) -> DashboardData:
-    """Gather ideas + papers into the renderer's input bundle."""
+    """Gather ideas + papers + experiments into the renderer's input bundle."""
     ideas = sorted(
         collect_ideas(),
         key=lambda i: (i.updated or date.min, i.slug),
         reverse=True,
     )
     papers = _sort_papers(collect_papers(papers_dir))
-    return DashboardData(ideas=ideas, papers=papers, generated_on=today or date.today())
+    experiments = _sort_experiments(collect_experiments())
+    return DashboardData(
+        ideas=ideas,
+        papers=papers,
+        experiments=experiments,
+        generated_on=today or date.today(),
+    )
 
 
 def build_dashboard(out_path: Path, *, today: date | None = None) -> Path:

@@ -11,7 +11,20 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-from research_assistant.dashboard import DashboardData, IdeaRow, PaperRow
+from research_assistant.dashboard import (
+    DashboardData,
+    ExperimentRow,
+    IdeaRow,
+    PaperRow,
+)
+
+# A paper is "behind" if its deadline is close (or past) and progress is low —
+# this is what the row-tint + ⚠ flag surface so you can triage at a glance.
+_BEHIND_DAYS = 30
+_BEHIND_PCT = 75
+# A paper/experiment is "stale" if its writing surface hasn't changed in a
+# while and it isn't finished — mirrors /mentor's stale-experiment nudge.
+_STALE_DAYS = 21
 
 _CSS = """
 :root{--fg:#1c2128;--muted:#656d76;--line:#d0d7de;--bg:#f6f8fa;--accent:#0969da;
@@ -49,6 +62,10 @@ border:1px solid var(--line);font-size:12px}
 input.filter{margin:0 0 8px;padding:5px 10px;width:280px;max-width:100%;
 border:1px solid var(--line);border-radius:6px;font-size:13px}
 input.filter:focus{outline:none;border-color:var(--accent)}
+tr.behind td{background:#fff5f5}tr.behind:hover td{background:#ffecec}
+.flag{color:var(--bad);font-weight:600;margin-right:4px}
+.next{font-size:12px;color:var(--muted)}
+.stale{color:var(--warn);font-weight:600}
 """
 
 _JS = """
@@ -158,6 +175,16 @@ def _sections_detail(p: PaperRow) -> str:
     )
 
 
+def _deadline_cell(p: PaperRow) -> str:
+    """Numeric ISO date (e.g. ``2026-12-10``); the original fuzzy window from
+    ``_venue.md`` is preserved as a hover tooltip. ``TBD`` when unknown."""
+    iso = p.deadline_date.isoformat() if p.deadline_date else ""
+    known = bool(p.deadline_date) and p.deadline_text != "TBD"
+    show = iso if known else "TBD"
+    title = f' title="{_esc(p.deadline_text)}"' if known else ""
+    return f'<td data-sort="{iso or "9999-12-31"}"{title}>{show}</td>'
+
+
 def _days_cell(p: PaperRow, today: date) -> str:
     d = p.days_left(today)
     if d is None:
@@ -168,36 +195,107 @@ def _days_cell(p: PaperRow, today: date) -> str:
     return f'<td data-sort="{d}"><span class="{cls}">T-{d}d</span></td>'
 
 
+def _updated_cell(updated: date | None, today: date, *, stale: bool) -> str:
+    """Relative 'Nd ago' (ISO on hover); amber when stale."""
+    if updated is None:
+        return '<td data-sort="999999">—</td>'
+    days = max(0, (today - updated).days)
+    rel = "today" if days == 0 else f"{days}d ago"
+    cls = ' class="stale"' if stale else ""
+    iso = updated.isoformat()
+    return f'<td data-sort="{days}" title="{iso}"><span{cls}>{rel}</span></td>'
+
+
+def _is_behind(p: PaperRow, today: date) -> bool:
+    d = p.days_left(today)
+    if d is None or p.percent >= 100:
+        return False
+    if d < 0:
+        return True                       # past deadline, not done
+    return d <= _BEHIND_DAYS and p.percent < _BEHIND_PCT
+
+
+def _is_stale(updated: date | None, today: date, percent: int) -> bool:
+    if updated is None or percent >= 100:
+        return False
+    return (today - updated).days >= _STALE_DAYS
+
+
 def _papers_table(papers: list[PaperRow], today: date) -> str:
     if not papers:
         return '<p class="empty">No papers yet — run <code>/paper venue</code>.</p>'
     head = (
-        "<thead><tr><th>Venue</th><th>Paper</th><th>Conference</th>"
-        "<th>Progress</th><th>Deadline</th><th>Due in</th><th>Open gaps</th></tr></thead>"
+        "<thead><tr><th>Venue</th><th>Paper</th><th>Progress</th><th>Deadline</th>"
+        "<th>Due in</th><th>Updated</th><th>Gaps</th><th>Next</th></tr></thead>"
     )
     rows = []
     for p in papers:
-        iso = p.deadline_date.isoformat() if p.deadline_date else ""
+        behind = _is_behind(p, today)
         bar = (
             f'<span class="bar"><span style="width:{p.percent}%"></span></span>'
             f'<span class="pct">{p.percent}% '
             f"({_esc(p.progress_detail)})</span>"
         )
-        direction_cell = (
+        flag = '<span class="flag" title="behind: near deadline, low progress">⚠</span>' if behind else ""
+        paper_cell = (
             _sections_detail(p) if p.direction else '<span class="empty">(no direction)</span>'
         )
+        stale = _is_stale(p.updated, today, p.percent)
         rows.append(
-            "<tr>"
+            f'<tr class="{"behind" if behind else ""}">'
             f"<td><code>{_esc(p.venue)}</code></td>"
-            f"<td>{direction_cell}</td>"
-            f"<td>{_esc(p.conference)}</td>"
+            f"<td>{flag}{paper_cell}</td>"
             f'<td data-sort="{p.percent}">{bar}</td>'
-            f'<td data-sort="{_esc(iso)}">{_esc(p.deadline_text)}</td>'
+            f"{_deadline_cell(p)}"
             f"{_days_cell(p, today)}"
+            f"{_updated_cell(p.updated, today, stale=stale)}"
             f'<td data-sort="{p.open_placeholders}">{p.open_placeholders or "—"}</td>'
+            f'<td class="next">{_esc(p.next_step)}</td>'
             "</tr>"
         )
     return f'<table class="sortable" id="papers">{head}<tbody>{"".join(rows)}</tbody></table>'
+
+
+def _experiments_table(experiments: list[ExperimentRow], today: date) -> str:
+    if not experiments:
+        return (
+            '<p class="empty">No experiments yet — run <code>/experiment init</code>.</p>'
+        )
+    head = (
+        "<thead><tr><th>Experiment</th><th>Status</th><th>Progress</th>"
+        "<th>Versions</th><th>Papers</th><th>Updated</th><th>Next</th></tr></thead>"
+    )
+    rows = []
+    for e in experiments:
+        bar = (
+            f'<span class="bar"><span style="width:{e.percent}%"></span></span>'
+            f'<span class="pct">{e.percent}% ({e.stages_done}/{e.stages_total})</span>'
+        )
+        name = (
+            f'<details><summary>{_esc(e.slug)}</summary>'
+            f'<div class="next">{_esc(e.title)}'
+            + (f' · <code>{_esc(e.repo)}</code>' if e.repo else "")
+            + "</div></details>"
+            if (e.title and e.title != e.slug) or e.repo
+            else f"<code>{_esc(e.slug)}</code>"
+        )
+        papers = ", ".join(_esc(s) for s in e.papers) if e.papers else "—"
+        stale = _is_stale(e.updated, today, e.percent)
+        rows.append(
+            "<tr>"
+            f"<td>{name}</td>"
+            f'<td><span class="st">{_esc(e.status)}</span></td>'
+            f'<td data-sort="{e.percent}">{bar}</td>'
+            f'<td data-sort="{e.versions}">{e.versions or "—"}</td>'
+            f"<td>{papers}</td>"
+            f"{_updated_cell(e.updated, today, stale=stale)}"
+            f'<td class="next">{_esc(e.next_step)}</td>'
+            "</tr>"
+        )
+    return (
+        f'<table class="sortable" id="experiments">{head}'
+        f'<tbody>{"".join(rows)}</tbody></table>'
+    )
 
 
 def render_html(data: DashboardData, *, refresh_seconds: int | None = None) -> str:
@@ -221,14 +319,22 @@ def render_html(data: DashboardData, *, refresh_seconds: int | None = None) -> s
     )
     soonest = next((p for p in data.papers if p.days_left(today) is not None), None)
     soon_txt = (
-        f"{_esc(soonest.venue)} · {_esc(soonest.deadline_text)}"
-        if soonest
+        f"{_esc(soonest.venue)} · {soonest.deadline_date.isoformat()}"
+        if soonest and soonest.deadline_date
         else "—"
     )
+    behind_n = sum(1 for p in data.papers if _is_behind(p, today))
+    behind_chip = (
+        f'<span class="chip">Behind <b style="color:var(--bad)">{behind_n}</b></span>'
+        if behind_n
+        else ""
+    )
     chips = (
-        f'<span class="chip">Ideas <b>{len(data.ideas)}</b></span>'
         f'<span class="chip">Papers <b>{len(data.papers)}</b></span>'
+        f'<span class="chip">Experiments <b>{len(data.experiments)}</b></span>'
+        f'<span class="chip">Ideas <b>{len(data.ideas)}</b></span>'
         f'<span class="chip">Next deadline <b>{soon_txt}</b></span>'
+        f"{behind_chip}"
     )
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -240,6 +346,8 @@ def render_html(data: DashboardData, *, refresh_seconds: int | None = None) -> s
 <div class="chips">{chips}</div>
 <h2>Papers</h2>
 {_papers_table(data.papers, today)}
+<h2>Experiments</h2>
+{_experiments_table(data.experiments, today)}
 <h2>Ideas</h2>
 {_ideas_table(data.ideas)}
 <script>{_JS}</script>

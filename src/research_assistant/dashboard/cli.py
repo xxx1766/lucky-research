@@ -28,12 +28,14 @@ def _cmd_build(args: argparse.Namespace) -> int:
     data = collect()  # cheap re-walk for the text summary
 
     print(f"dashboard → {out.resolve()}")
-    print(f"  ideas:  {len(data.ideas)}")
-    print(f"  papers: {len(data.papers)}")
+    print(f"  papers: {len(data.papers)} · experiments: {len(data.experiments)} · ideas: {len(data.ideas)}")
     for p in data.papers:
         name = f"{p.venue}/{p.direction}" if p.direction else f"{p.venue} (no direction)"
+        due = p.deadline_date.isoformat() if (p.deadline_date and p.deadline_text != "TBD") else "TBD"
         gaps = f" · {p.open_placeholders} gaps" if p.open_placeholders else ""
-        print(f"    {name:<40} {p.percent:>3}%  due {p.deadline_text}{gaps}")
+        print(f"    {name:<48} {p.percent:>3}%  due {due}{gaps}")
+    for e in data.experiments:
+        print(f"    exp {e.slug:<44} {e.percent:>3}%  {e.status} · {e.versions} versions")
     return 0
 
 

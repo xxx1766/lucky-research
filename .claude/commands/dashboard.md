@@ -18,26 +18,32 @@ Invoke the `dashboard` skill to build `outputs/dashboard.html`.
 
 ## What it shows
 
-Two panels, both read straight from on-disk truth (no AgentDB dependency):
+Three panels, all read straight from on-disk truth (no AgentDB dependency):
 
 | Panel | Source | Columns |
 |---|---|---|
-| **Ideas** | `outputs/idea-checks/<slug>/idea.md` (via `ideas.registry.list_ideas`) | slug · status · updated · venue · verdict · statement |
-| **Papers** | every `(venue, direction)` under `outputs/papers/` | venue · paper (expandable section list) · conference · progress · deadline · due-in · open gaps |
+| **Papers** | every `(venue, direction)` under `outputs/papers/` | venue · paper (expandable sections) · progress · deadline · due-in · updated · gaps · next |
+| **Experiments** | every `outputs/experiments/<slug>/` | experiment (expandable title+repo) · status · progress · versions · bound papers · updated · next |
+| **Ideas** | `outputs/idea-checks/<slug>/idea.md` (via `ideas.registry.list_ideas`) | idea · status · updated · venue · verdict · statement (filterable + collapsible) |
 
-- **Progress** is the 7-stage pipeline (`venue → direction → scout → focus →
-  motivate → write → render`), shown as a bar + `N/7` + percent.
-- **Paper** cell is expandable (`▸`): per drafted `sections/*.tex` it lists the
-  approximate word count and the count of unresolved evidence-first
-  placeholders (`[REF_NEEDED]` / `[DATA_NEEDED]` / `[FIGURE_NEEDED]` /
-  `[CLAIM_UNVERIFIED]`). Comment-only (`%`) occurrences are not counted.
-- **Conference** + **deadline** are parsed best-effort from each venue's
-  `_venue.md` (the `Conference` row and the `Full paper` deadline row). The
-  deadline is a *coarse* sort key — lock real dates against the official CFP.
-- **Due-in** is `deadline − today`; overdue is flagged red, ≤30 days amber.
-- The page is a static HTML file with inline CSS/JS — open it in a browser;
-  every column header is clickable to re-sort. Papers default to
-  soonest-deadline-first.
+- **Paper progress** is page-share weighted — `Σ(planned_pages × fill) ÷
+  Σ(planned_pages)` from `outline.md`'s `## Page budget` table; falls back to
+  the 7-stage pipeline % when a direction has no budget. The **paper** cell is
+  expandable (`▸`): per planned section it shows planned pp · words · % filled ·
+  unresolved placeholders (`[REF_NEEDED]`/`[DATA_NEEDED]`/`[FIGURE_NEEDED]`/
+  `[CLAIM_UNVERIFIED]`; `%`-comment occurrences ignored), and `not started` for
+  undrafted ones. **Experiment progress** is the 5-stage board (`init → analyze`).
+- **deadline** is a numeric ISO date parsed best-effort from each venue's
+  `_venue.md` `Full paper` row (original fuzzy window kept as a hover tooltip);
+  `TBD` when unknown. It's a *coarse* sort key — lock real dates against the CFP.
+- **Due-in** is `deadline − today` (overdue red, ≤30 days amber). **Behind**
+  papers (near/past deadline + low progress) get a `⚠` and a red row tint, with
+  a `Behind N` count in the header. **Updated** is the newest write-surface
+  mtime ("Nd ago"); items untouched ≥21 days and unfinished are flagged stale.
+- **next** shows the recommended next slash-command per row.
+- Self-contained HTML with inline CSS/JS — click any column header to re-sort
+  (sort survives auto-refresh); papers default to soonest-deadline-first; the
+  Ideas panel has a live search box.
 
 ## Action
 

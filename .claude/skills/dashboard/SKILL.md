@@ -9,29 +9,35 @@ description: Build a single self-contained HTML dashboard of all captured ideas 
 
 ## Mental model
 
-The plugin already tracks two kinds of state on disk. The dashboard is a
+The plugin already tracks three kinds of state on disk. The dashboard is a
 **read-only aggregator** that joins them into one HTML page — it invents no new
 state and writes nothing except the single output file.
 
 ```
-outputs/idea-checks/<slug>/idea.md     ─┐
-                                         ├─▶ python -m research_assistant.dashboard
-outputs/papers/<venue>/<direction>/     ─┘        │
-  + <venue>/_venue.md (conference + deadline)     ▼
+outputs/papers/<venue>/<direction>/     ─┐
+  + <venue>/_venue.md, outline.md         │
+outputs/experiments/<slug>/             ─┼─▶ python -m research_assistant.dashboard
+outputs/idea-checks/<slug>/idea.md      ─┘        │
+                                                  ▼
                                           outputs/dashboard.html  (open in browser)
 ```
 
-- **Ideas** come from `ideas.registry.list_ideas()` — every captured idea's
-  slug / status / updated / venue / verdict / statement.
-- **Papers** come from walking `outputs/papers/`. For each `(venue, direction)`
-  the 7-stage board (`papers.stage_status` → `papers.stages_completed`) gives a
-  percent; `papers.placeholders.scan_placeholders` + `papers.tex_files` give the
-  per-section word count and unresolved-placeholder count. A venue with no
-  direction still appears as a single direction-less row (so its deadline shows).
-- **Conference name + deadline** are parsed best-effort from `_venue.md`
-  (`dashboard.venue_meta`). Venue briefs are `TBD`-heavy scaffolds, so the
-  deadline is a *coarse* sort key, not an authoritative date. Bound directions
-  are symlinks into experiment repos — `is_dir()` follows them, so they show up.
+- **Papers** come from walking `outputs/papers/`. Progress is page-share
+  weighted — the `## Page budget` table in `outline.md` (`dashboard.outline_budget`)
+  gives planned pages per section; `fill` ≈ drafted words ÷ `WORDS_PER_PAGE`,
+  capped per section; falls back to the 7-stage board (`papers.stage_status` →
+  `papers.stages_completed`) when no budget. `papers.next_suggested` drives the
+  Next column; newest write-surface mtime drives Updated/staleness; near-deadline
+  + low-progress drives the behind flag. A venue with no direction still shows
+  as one direction-less row.
+- **deadline** is a numeric ISO date parsed best-effort from `_venue.md`'s
+  `Full paper` row (`dashboard.venue_meta`), original window kept as a tooltip;
+  it's a *coarse* sort key, not authoritative. Bound directions are symlinks
+  into experiment repos — `is_dir()` follows them, so they show up.
+- **Experiments** come from `experiments.parse_experiment` (manifest: repo,
+  bound papers, status) + the 5-stage `experiments.status` board.
+- **Ideas** come from `ideas.registry.list_ideas()` — slug / status / updated /
+  venue / verdict / statement (with a live filter + collapsible statements).
 
 ## Flow
 

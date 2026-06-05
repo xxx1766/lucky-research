@@ -4,13 +4,15 @@ from __future__ import annotations
 from datetime import date
 
 from research_assistant.dashboard import (
+    DashboardData,
+    ExperimentRow,
+    IdeaRow,
     PaperRow,
     SectionRow,
     build_dashboard,
     collect_papers,
 )
 from research_assistant.dashboard.render import render_html
-from research_assistant.dashboard import DashboardData, IdeaRow
 from research_assistant.dashboard.venue_meta import parse_venue_meta
 
 
@@ -312,6 +314,114 @@ def test_render_page_progress_label():
     html = render_html(data)
     assert "1.0/4.00 pp" in html      # page-share detail, not "3/7 stages"
     assert "25%" in html              # 1.0 / 4.0
+
+
+def test_render_deadline_is_numeric_with_tooltip():
+    known = PaperRow(
+        venue="OSDI-2027", direction="d", conference="C",
+        deadline_text="mid Dec 2026 (~Dec 10 ±1 wk, hard)",
+        deadline_date=date(2026, 12, 10), stages_done=7,
+    )
+    tbd = PaperRow(
+        venue="X-2027", direction=None, conference="C",
+        deadline_text="TBD", deadline_date=date(2027, 12, 1), stages_done=1,
+    )
+    data = DashboardData(ideas=[], papers=[known, tbd], generated_on=date(2026, 6, 5))
+    html = render_html(data)
+    assert ">2026-12-10<" in html                                  # numeric date shown
+    assert 'title="mid Dec 2026 (~Dec 10 ±1 wk, hard)"' in html    # window kept on hover
+    assert ">TBD<" in html                                          # no real date → TBD
+    assert "mid Dec 2026 (~Dec 10 ±1 wk, hard)</td>" not in html    # window no longer the cell text
+
+
+def test_papers_table_drops_conference_adds_next_and_updated():
+    p = PaperRow(
+        venue="OSDI-2027", direction="weightlet", conference="22nd USENIX OSDI",
+        deadline_text="mid Dec 2026", deadline_date=date(2026, 12, 10), stages_done=5,
+        next_step="/paper render", updated=date(2026, 6, 4),
+    )
+    data = DashboardData(ideas=[], papers=[p], generated_on=date(2026, 6, 5))
+    html = render_html(data)
+    assert "<th>Conference</th>" not in html        # column removed
+    assert "22nd USENIX OSDI" not in html           # conference no longer rendered
+    assert "<th>Next</th>" in html and "/paper render" in html
+    assert "<th>Updated</th>" in html and "1d ago" in html
+
+
+def test_behind_flag_when_near_deadline_and_low_progress():
+    behind = PaperRow(
+        venue="V-2026", direction="d", conference="C", deadline_text="soon",
+        deadline_date=date(2026, 6, 20), stages_done=2,  # ~29% < 75%, 15d out
+    )
+    fine = PaperRow(
+        venue="W-2027", direction="e", conference="C", deadline_text="far",
+        deadline_date=date(2027, 6, 20), stages_done=2,  # far deadline → not behind
+    )
+    today = date(2026, 6, 5)
+    data = DashboardData(ideas=[], papers=[behind, fine], generated_on=today)
+    html = render_html(data)
+    assert 'class="behind"' in html
+    assert "Behind <b" in html                       # summary chip
+    # the far-deadline paper must NOT be flagged
+    assert html.count('class="behind"') == 1
+
+
+def test_stale_marker_for_old_unfinished_paper():
+    p = PaperRow(
+        venue="V-2026", direction="d", conference="C", deadline_text="x",
+        deadline_date=date(2026, 12, 1), stages_done=3,
+        updated=date(2026, 5, 1),  # 35 days before "today" → stale
+    )
+    data = DashboardData(ideas=[], papers=[p], generated_on=date(2026, 6, 5))
+    html = render_html(data)
+    assert 'class="stale"' in html
+
+
+# ---------- experiments panel ----------
+
+def test_collect_experiments(tmp_path, monkeypatch):
+    import research_assistant.experiments as exp_pkg
+    from research_assistant.dashboard import collect_experiments
+
+    root = tmp_path / "experiments"
+    (root / "rolling-llm").mkdir(parents=True)
+    # Both parsers.py and paths.py read the dir via `_exp.EXPERIMENTS_DIR`
+    # (late attribute access), so patching the package attribute is enough.
+    monkeypatch.setattr(exp_pkg, "EXPERIMENTS_DIR", root)
+    (root / "rolling-llm" / "manifest.md").write_text(
+        "---\nslug: rolling-llm\ntitle: Rolling LLM\ncreated_at: 2026-05-01\n"
+        "repo:\n  url: git@github.com:x/y.git\npapers:\n  - weightlet\n"
+        "status: active\n---\nbody\n",
+        encoding="utf-8",
+    )
+    rows = collect_experiments()
+    assert len(rows) == 1
+    e = rows[0]
+    assert e.slug == "rolling-llm" and e.title == "Rolling LLM"
+    assert e.repo == "git@github.com:x/y.git"
+    assert e.papers == ("weightlet",)
+    assert e.status == "active"
+    assert 0 <= e.percent <= 100
+
+
+def test_experiments_table_empty_note():
+    data = DashboardData(ideas=[], papers=[], experiments=[], generated_on=date(2026, 6, 5))
+    html = render_html(data)
+    assert "<h2>Experiments</h2>" in html
+    assert "No experiments yet" in html
+
+
+def test_experiments_table_renders_row():
+    e = ExperimentRow(
+        slug="rolling-llm", title="Rolling LLM", status="active",
+        stages_done=3, stages_total=5, versions=2, repo="git@github.com:x/y.git",
+        papers=("weightlet",), next_step="/experiment analyze", updated=date(2026, 6, 4),
+    )
+    data = DashboardData(ideas=[], papers=[], experiments=[e], generated_on=date(2026, 6, 5))
+    html = render_html(data)
+    assert "rolling-llm" in html and "/experiment analyze" in html
+    assert "60%" in html             # 3/5
+    assert "weightlet" in html       # bound paper
 
 
 def test_render_tables_have_ids_for_sort_persistence():
