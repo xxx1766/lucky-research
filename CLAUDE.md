@@ -12,7 +12,7 @@ small group of friends via a single GitHub repo (`git@github.com:xxx1766/lucky-r
 | Slash | Skill / agent | Capability |
 |---|---|---|
 | `/summarize`   | `lit-summarize`             | 文献总结 — PDFs/arXiv/DOIs → structured markdown summaries, indexed in AgentDB `papers/`. Pulls canonical BibTeX via `lit/publisher_bibtex.py` (CrossRef → doi.org → CloakBrowser) when a DOI is known. |
-| `/idea-check`  | `idea-validate`             | idea 确认 — 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) with two micro-flows (`brainstorm` 1.5, `contrarian` 2.5); plus legacy horizontal / vertical modes. |
+| `/idea-check`  | `idea-validate`             | idea 确认 — 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) with two micro-flows (`brainstorm` 1.5, `contrarian` 2.5) and an on-demand `2paper` story-packaging lens (skill: `academic-story-packaging`); plus legacy horizontal / vertical modes. |
 | `/scout-swarm` | `research-swarm` (optional) | 并行 scout — parallelize `/paper scout` with a ruflo researcher swarm; degrades to "use `/paper scout`" when ruflo tools are absent. |
 | `/paper`       | `paper-architect`           | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`, `/convert` | `ref-manager`          | 参考文献 + 格式 — `\cite{}` scan + BibTeX merge into `<direction>/refs.bib`; pandoc-driven Markdown ↔ LaTeX ↔ docx conversion. |
@@ -45,8 +45,9 @@ src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, 
                           policy + external-artifacts + reindex JSONL
   common/                 io.py (paths) + git.py (subprocess wrapper) + frontmatter.py (YAML)
 
-.claude/skills/           Project skills (lit-summarize, idea-validate, paper-architect,
-                          ref-manager, research-mentor, experiment-runner, figure-tool,
+.claude/skills/           Project skills (lit-summarize, idea-validate,
+                          academic-story-packaging, paper-architect, ref-manager,
+                          research-mentor, experiment-runner, figure-tool,
                           pseudocode-tool, migrate-tool, research-swarm)
                           + RuFlo V3 framework skills — all Claude-Code-discoverable.
 .claude/commands/         13 slash entry points (/summarize, /idea-check, /scout-swarm,

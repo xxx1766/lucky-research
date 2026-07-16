@@ -24,6 +24,7 @@ The first token may be a subcommand; anything after it is the argument.
 | `/idea-check venues` | Stage 4 — suggest target venues. |
 | `/idea-check knowledge` | Stage 5 — brain-library index. |
 | `/idea-check handoff` | Stage 6 — confirm + invoke `/paper`. |
+| `/idea-check 2paper [<slug>]` | On-demand story packaging — turn the active idea (or `<slug>`) + its artifacts into an evidence-grounded paper story. Dispatches to `.claude/skills/academic-story-packaging/SKILL.md`; writes `<slug>/story.md`. Not a pipeline stage — never advances `status`. |
 | `/idea-check status` | Print the 6-stage checkbox for the active idea. |
 | `/idea-check list` | Print the global registry (`outputs/idea-checks/_index.md`). |
 | `/idea-check show <slug>` | Print the manifest + status board for one idea. |
@@ -42,7 +43,10 @@ stage-bearing subcommand reads it on entry; Stage 1 writes it. `list` and
 2. Read the cursor (`mcp__claude-flow__memory_retrieve` namespace=`project`,
    key=`idea-context.current`).
 3. Dispatch on the subcommand. Follow the matching stage section of the skill
-   exactly — multi-turn, plain text, no `AskUserQuestion`.
+   exactly — multi-turn, plain text, no `AskUserQuestion`. Exception:
+   `2paper` dispatches to `.claude/skills/academic-story-packaging/SKILL.md`
+   (see its "Integration with /idea-check" section) instead of a stage of
+   `idea-validate`.
 4. Every state-changing stage MUST call `registry.update_idea(slug, ...)` so the
    on-disk manifest, the global `_index.md`, and the AgentDB payload stay in
    sync.
@@ -63,8 +67,9 @@ outputs/idea-checks/
     venues.md
     knowledge.md
     status.md
+    story.md        (only if /idea-check 2paper was run)
     horizontal.md   (legacy)
     lineage.md      (legacy)
 ```
 
-AgentDB mirrors: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,evaluation,venues,knowledge,horizontal,lineage}`.
+AgentDB mirrors: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,evaluation,venues,knowledge,story,horizontal,lineage}`.

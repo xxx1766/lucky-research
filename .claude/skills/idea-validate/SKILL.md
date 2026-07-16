@@ -94,7 +94,8 @@ At every `/idea-check ...` invocation that isn't `list` or `show <slug>`:
   the chosen venue; the cursor only carries the slug + tags, which is all
   downstream stages need to locate the idea folder.)
 * If absent and the subcommand needs an active idea (`scout`/`evaluate`/`venues`/
-  `knowledge`/`handoff`/`status`/`horizontal`/`vertical`), tell the user:
+  `knowledge`/`handoff`/`2paper` without an explicit `<slug>`/`status`/
+  `horizontal`/`vertical`), tell the user:
   `Run /idea-check "<your idea>" first to capture it.`
 
 ## Subcommand router
@@ -109,6 +110,7 @@ At every `/idea-check ...` invocation that isn't `list` or `show <slug>`:
 | `venues` | Run Stage 4. |
 | `knowledge` | Run Stage 5. |
 | `handoff` | Run Stage 6. |
+| `2paper [<slug>]` | On-demand story packaging — load `.claude/skills/academic-story-packaging/SKILL.md` and follow its "Integration with /idea-check" section. Writes `<slug>/story.md` + AgentDB `ideas/<slug>/story`. Not a stage; never advances `status`. |
 | `status` | Print `outputs/idea-checks/<slug>/status.md` for the active idea. |
 | `list` | Print `outputs/idea-checks/_index.md` (the vault registry). |
 | `show <slug>` | Print the manifest + status board for one idea. |
@@ -396,6 +398,7 @@ venues first.
 | | `ideas/<slug>/evaluation` |
 | | `ideas/<slug>/venues` |
 | | `ideas/<slug>/knowledge` |
+| | `ideas/<slug>/story` (2paper, via academic-story-packaging) |
 | | `ideas/<slug>/horizontal` (legacy) |
 | | `ideas/<slug>/lineage` (legacy) |
 

@@ -43,7 +43,8 @@ Glossary:
 
 A 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge →
 handoff`) plus two interstitial micro-flows (`brainstorm` 1.5 and `contrarian`
-2.5). State is mirrored on disk **and** in AgentDB.
+2.5) and an on-demand `2paper` story-packaging lens. State is mirrored on disk
+**and** in AgentDB.
 
 | Subcommand | Purpose |
 |---|---|
@@ -57,14 +58,15 @@ handoff`) plus two interstitial micro-flows (`brainstorm` 1.5 and `contrarian`
 | `/idea-check venues` | **Stage 4** — venue ranking by fit score. |
 | `/idea-check knowledge` | **Stage 5** — brain-library study plan. |
 | `/idea-check handoff` | **Stage 6** — confirm + set the `/paper` cursor. |
+| `/idea-check 2paper [<slug>]` | **On-demand** — evidence-grounded paper story for the active idea (skill: `academic-story-packaging`). Writes `<slug>/story.md`; never advances `status`. |
 | `/idea-check status` | Render the 6-stage board for the active idea. |
 | `/idea-check list` | Print `outputs/idea-checks/_index.md`. |
 | `/idea-check show <slug>` | Print one manifest + status. |
 | `/idea-check horizontal <free-text>` | Legacy horizontal comparison matrix (no colon — space-separated). |
 | `/idea-check vertical <slug>` | Legacy vertical lineage trace (no colon — space-separated). |
 
-- Per-idea folder: `outputs/idea-checks/<slug>/{idea.md, socratic.md, brainstorm.md, scout.md, contrarian.md, evaluate.md, venues.md, knowledge.md, status.md}`.
-- AgentDB: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,contrarian,evaluation,venues,knowledge}`, cursor `project/idea-context.current`, handoff `project/paper-context.current`.
+- Per-idea folder: `outputs/idea-checks/<slug>/{idea.md, socratic.md, brainstorm.md, scout.md, contrarian.md, evaluate.md, venues.md, knowledge.md, story.md, status.md}`.
+- AgentDB: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,contrarian,evaluation,venues,knowledge,story}`, cursor `project/idea-context.current`, handoff `project/paper-context.current`.
 - Helpers: `ideas/{socratic, brainstorm, scout, contrarian, evaluate, venues, knowledge, registry, slug, status}.py`.
 
 

@@ -11,7 +11,7 @@ track your trajectory over time, and migrate the whole workspace across machines
 | Slash | Skill / agent | What it does |
 |---|---|---|
 | `/summarize`   | `lit-summarize`            | Summarize PDFs (`inputs/papers/*.pdf`) or arXiv URLs into structured markdown; index in AgentDB `papers/`. |
-| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) plus two micro-flows (`brainstorm` at 1.5, `contrarian` at 2.5). Legacy `horizontal` / `vertical` modes still supported. |
+| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) plus two micro-flows (`brainstorm` at 1.5, `contrarian` at 2.5) and an on-demand `2paper` story-packaging lens (skill: `academic-story-packaging`). Legacy `horizontal` / `vertical` modes still supported. |
 | `/scout-swarm` | `research-swarm` (optional)| Optional ruflo accelerator — parallelize `/paper scout` with a researcher swarm. Degrades to "use `/paper scout`" when swarm tools are absent. |
 | `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → verify → status → archive`) under `outputs/papers/<venue>/<direction>/`. `verify` runs a 3-pass evidence-closure audit (Evidence → Argument → Style) and builds a typed debt ledger surfaced on the status board. |
 | `/cite`        | `ref-manager`              | Scan LaTeX `\cite{...}` keys and merge BibTeX into `<direction>/refs.bib`. |
