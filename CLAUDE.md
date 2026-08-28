@@ -12,7 +12,7 @@ small group of friends via a single GitHub repo (`git@github.com:xxx1766/lucky-r
 | Slash | Skill / agent | Capability |
 |---|---|---|
 | `/summarize`   | `lit-summarize`             | 文献总结 — PDFs/arXiv/DOIs → structured markdown summaries, indexed in AgentDB `papers/`. Pulls canonical BibTeX via `lit/publisher_bibtex.py` (CrossRef → doi.org → CloakBrowser) when a DOI is known. |
-| `/idea-check`  | `idea-validate`             | idea 确认 — 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) with two micro-flows (`brainstorm` 1.5, `contrarian` 2.5) and an on-demand `2paper` story-packaging lens (skill: `academic-story-packaging`); plus legacy horizontal / vertical modes. |
+| `/idea-check`  | `idea-validate`             | idea 确认 — 五关门禁 (`failure-case → problem-standalone → mechanism → predictions → minimal-experiment`)，未通过的关卡硬阻断后续关卡与 `handoff`；`--force` 记录真实判定并保留 override 痕迹。`scout` / `brainstorm` / `contrarian` / `assumptions` / `evaluate` / `venues` / `knowledge` / `2paper` 是取证服务，不推进 status；另有 legacy horizontal / vertical 模式。 |
 | `/scout-swarm` | `research-swarm` (optional) | 并行 scout — parallelize `/paper scout` with a ruflo researcher swarm; degrades to "use `/paper scout`" when ruflo tools are absent. |
 | `/paper`       | `paper-architect`           | 论文架构 + 写作 — venue-rooted, multi-stage flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → status → archive`) under `outputs/papers/<venue>/<direction>/`. |
 | `/cite`, `/convert` | `ref-manager`          | 参考文献 + 格式 — `\cite{}` scan + BibTeX merge into `<direction>/refs.bib`; pandoc-driven Markdown ↔ LaTeX ↔ docx conversion. |
@@ -30,8 +30,9 @@ small group of friends via a single GitHub repo (`git@github.com:xxx1766/lucky-r
 src/research_assistant/   Python helpers (PDF parse, BibTeX, pandoc shell-outs, mentor diff)
   lit/                    PDF + arXiv + DOI ingestion (+ publisher_bibtex.py 3-tier fetch;
                           sourcing.py for venue-aware scout)
-  ideas/                  6-stage Socratic helpers (registry, socratic, brainstorm, scout,
-                          contrarian, evaluate, venues, knowledge, status, slug)
+  ideas/                  五关门禁 (gates.py = 进度轴) + 取证服务 helpers (registry,
+                          socratic, brainstorm, scout, contrarian, evaluate, venues,
+                          knowledge, status, slug)
   refs/                   BibTeX merge + pandoc convert + LaTeX render (tectonic ladder)
   mentor/                 Trajectory diff + check-in template + research-notes triplet
                           + past-work + boss-profile
@@ -113,9 +114,12 @@ inputs/papers/*.pdf  ──┐
 arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<slug>.md  + AgentDB papers/
                                                        │
                                                        ▼
-                                          /idea-check  (socratic → brainstorm → scout →
-                                                        contrarian → evaluate → venues →
-                                                        knowledge → handoff)
+                                          /idea-check  (capture → failure-case →
+                                                        problem-standalone → mechanism →
+                                                        predictions → minimal-experiment →
+                                                        handoff; 服务: scout, contrarian,
+                                                        assumptions, brainstorm, evaluate,
+                                                        venues, knowledge)
                                                        │
                                                        ▼
                                           /paper       (venue → direction → bind → scout →

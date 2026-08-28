@@ -1,16 +1,22 @@
-"""Idea-graph + Socratic-direction helpers — used by the `idea-validate` skill.
+"""Idea-graph + gate-pipeline helpers — used by the `idea-validate` skill.
 
-Two legacy modes (retained):
-- horizontal: compare N papers on fixed axes (problem, method, dataset, metric, gap).
-- vertical:   trace one idea's lineage across time.
+The progress axis is the **five-gate validation pipeline** (:mod:`gates`):
+failure-case → problem-standalone → mechanism → predictions →
+minimal-experiment. A gate that has not cleared blocks every later gate; the
+override is recorded, never silent.
 
-New flow on top (used by ``/idea-check <free-text>`` and per-stage subcommands):
-- Socratic discussion → distilled idea statement + persisted manifest.
+Everything else is a *service* the gates call for evidence, and none of them
+advance status on their own:
+- Socratic capture → distilled idea statement + persisted manifest.
+- Brainstorm / contrarian → fresh angles, inverted framings, sibling ideas.
 - Scout (last 3 years, arXiv + WebSearch fallback) → grouped paper survey.
-- Evaluate (value + feasibility rubric) → verdict + top-3 risks.
-- Venues (curated registry × user-curated _venue.md) → ranked target list.
-- Knowledge (brain-library index) → study plan, mirrored to AgentDB for /paper.
+- Assumption mining → the unstated premises a paper leans on.
+- Evaluate (value + feasibility rubric) → scores, risks, pre-registration.
+- Venues / knowledge → ranked target list, study plan.
 - Handoff → set ``project/paper-context.current`` so /paper can take over.
+
+Two legacy comparison modes are retained: ``horizontal`` (compare N papers on
+fixed axes) and ``vertical`` (trace one idea's lineage).
 
 The submodules export the dataclasses + renderers; the skill prompt drives the
 conversation and calls the AgentDB MCP tools.
@@ -24,6 +30,7 @@ from research_assistant.ideas import (
     brainstorm,
     contrarian,
     evaluate,
+    gates,
     knowledge,
     registry,
     scout,
@@ -82,6 +89,7 @@ __all__ = [
     "build_vertical_lineage",
     "contrarian",
     "evaluate",
+    "gates",
     "knowledge",
     "registry",
     "scout",

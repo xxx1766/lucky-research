@@ -22,23 +22,29 @@ from pydantic import BaseModel, Field
 
 from research_assistant.common.io import IDEA_CHECKS_DIR
 
+#: One status per cleared gate (see :mod:`research_assistant.ideas.gates`).
+#: The labels are deliberately semantic rather than ``g1``/``g2`` — the status
+#: should say what was established, not which ordinal was reached.
 IdeaStatus = Literal[
     "captured",
-    "scouted",
-    "evaluated",
-    "venued",
-    "knowledge-indexed",
+    "failure-case-found",
+    "problem-standalone",
+    "mechanism-explained",
+    "predictions-locked",
+    "experiment-ready",
     "handed-off",
 ]
 
 STATUS_ORDER: tuple[IdeaStatus, ...] = (
     "captured",
-    "scouted",
-    "evaluated",
-    "venued",
-    "knowledge-indexed",
+    "failure-case-found",
+    "problem-standalone",
+    "mechanism-explained",
+    "predictions-locked",
+    "experiment-ready",
     "handed-off",
 )
+
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)$", re.DOTALL)
@@ -62,6 +68,8 @@ class IdeaManifest(BaseModel):
     venue: str | None = None
     verdict: str | None = None
     parent_idea: str | None = None
+    forced_gates: list[str] = Field(default_factory=list)
+    """Gates cleared by override rather than on merit — kept visible on purpose."""
     body: str = ""
 
     def with_status(self, new_status: IdeaStatus) -> "IdeaManifest":
@@ -99,6 +107,8 @@ def _render_manifest_md(m: IdeaManifest) -> str:
         fm["verdict"] = m.verdict
     if m.parent_idea:
         fm["parent_idea"] = m.parent_idea
+    if m.forced_gates:
+        fm["forced_gates"] = list(m.forced_gates)
     body = m.body.strip()
     head = yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip()
     parts = [f"---\n{head}\n---", "", f"# {m.statement}", ""]
@@ -125,6 +135,7 @@ def _parse_manifest_md(text: str) -> IdeaManifest:
         venue=fm.get("venue"),
         verdict=fm.get("verdict"),
         parent_idea=fm.get("parent_idea"),
+        forced_gates=list(fm.get("forced_gates") or []),
         body=body.strip(),
     )
 
@@ -196,8 +207,11 @@ def render_index_md(manifests: list[IdeaManifest]) -> str:
         statement = m.statement.replace("|", "\\|")
         if len(statement) > 80:
             statement = statement[:77] + "…"
+        status = m.status
+        if m.forced_gates:
+            status += f" ⚠{len(m.forced_gates)} forced"
         lines.append(
-            f"| `{m.slug}` | {m.status} | {m.updated.isoformat()} | "
+            f"| `{m.slug}` | {status} | {m.updated.isoformat()} | "
             f"{m.venue or '—'} | {m.verdict or '—'} | {statement} |"
         )
     lines.append("")
@@ -221,6 +235,7 @@ def to_agentdb_payload(manifest: IdeaManifest) -> dict:
         "venue": manifest.venue,
         "verdict": manifest.verdict,
         "parent_idea": manifest.parent_idea,
+        "forced_gates": list(manifest.forced_gates),
     }
 
 

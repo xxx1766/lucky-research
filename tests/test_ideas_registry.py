@@ -80,17 +80,17 @@ def test_update_idea_bumps_updated_and_advances_status(fake_dir, monkeypatch):
             return fake_today
 
     monkeypatch.setattr(registry_mod, "date", _Date)
-    new = update_idea(m.slug, status="evaluated")
-    assert new.status == "evaluated"
+    new = update_idea(m.slug, status="mechanism-explained")
+    assert new.status == "mechanism-explained"
     assert new.updated == fake_today
 
 
 def test_status_is_monotonically_forward(fake_dir):
-    m = _sample().model_copy(update={"status": "evaluated"})
+    m = _sample().model_copy(update={"status": "mechanism-explained"})
     save_idea(m)
-    # Try to "regress" back to captured — should stay evaluated.
+    # Try to "regress" back to captured — should stay mechanism-explained.
     new = update_idea(m.slug, status="captured")
-    assert new.status == "evaluated"
+    assert new.status == "mechanism-explained"
 
 
 def test_invalid_slug_rejected(fake_dir):
@@ -130,3 +130,21 @@ def test_malformed_manifest_is_skipped_in_list(fake_dir):
     (bad_dir / "idea.md").write_text("no frontmatter here\n", encoding="utf-8")
     items = list_ideas()
     assert [i.slug for i in items] == ["good"]
+
+
+def test_forced_gates_roundtrip_and_show_on_the_index(fake_dir):
+    save_idea(_sample("forced"))
+    update_idea("forced", status="problem-standalone",
+                forced_gates=["problem-standalone"])
+    assert load_idea("forced").forced_gates == ["problem-standalone"]
+    # An override must stay visible in the vault listing, not just in gates.md.
+    md = render_index_md(list_ideas())
+    assert "forced" in md
+    assert "⚠1 forced" in md
+
+
+def test_manifest_without_forced_gates_omits_the_key(fake_dir):
+    save_idea(_sample("clean"))
+    text = (fake_dir / "clean" / "idea.md").read_text(encoding="utf-8")
+    assert "forced_gates" not in text
+    assert load_idea("clean").forced_gates == []

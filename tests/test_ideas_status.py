@@ -1,4 +1,4 @@
-"""Tests for the idea status board."""
+"""Tests for the idea status board (gate axis + service checklist)."""
 from __future__ import annotations
 
 from datetime import date
@@ -30,52 +30,71 @@ def _sample(slug: str = "smoke") -> IdeaManifest:
     )
 
 
-def test_freshly_captured_idea_marks_captured_stage_done(fake_dir):
+def test_freshly_captured_idea_has_no_gate_cleared(fake_dir):
     save_idea(_sample())
     s = stage_status("smoke")
-    # Manifest exists → captured stage is done even without socratic.md.
-    assert s.has_socratic is True
-    assert s.has_scout is False
+    # Capture is not a gate — an idea on disk has cleared nothing yet.
+    assert s.gates_cleared == ()
+    assert s.open_gate == "failure-case"
     md = render_status_md("smoke")
-    assert "[x] captured" in md
-    assert "[ ] scouted" in md
+    assert "[ ] 1. 真实失效场景 (`failure-case`)" in md
+    assert "`/idea-check failure-case`" in md
 
 
-def test_status_advances_with_manifest(fake_dir):
+def test_gates_clear_as_the_manifest_status_advances(fake_dir):
     save_idea(_sample())
-    update_idea("smoke", status="evaluated")
+    update_idea("smoke", status="mechanism-explained")
     s = stage_status("smoke")
-    assert s.has_socratic
-    assert s.has_scout
-    assert s.has_evaluate
-    assert not s.has_venues
+    assert s.cleared("failure-case")
+    assert s.cleared("problem-standalone")
+    assert s.cleared("mechanism")
+    assert not s.cleared("predictions")
+    assert s.open_gate == "predictions"
 
 
-def test_artifact_file_marks_stage_done_independently(fake_dir):
+def test_service_artifact_does_not_clear_a_gate(fake_dir):
     save_idea(_sample())
     (fake_dir / "smoke" / "scout.md").write_text("# scout\n", encoding="utf-8")
     s = stage_status("smoke")
-    # Manifest still says "captured" but scout.md exists → scout shows done.
-    assert s.has_scout is True
+    # scout.md is evidence, not progress — the point of the gate refactor.
+    assert s.gates_cleared == ()
+    assert s.services["scout"] is True
+    md = render_status_md("smoke")
+    assert "[x] scout 近三年文献" in md
 
 
-def test_handed_off_status(fake_dir):
+def test_forced_gate_is_flagged_on_the_board(fake_dir):
+    save_idea(_sample())
+    update_idea(
+        "smoke",
+        status="problem-standalone",
+        forced_gates=["problem-standalone"],
+    )
+    md = render_status_md("smoke")
+    assert "**forced**" in md
+    assert "强制放行" in md
+
+
+def test_handed_off_board(fake_dir):
     save_idea(_sample())
     update_idea("smoke", status="handed-off")
+    s = stage_status("smoke")
+    assert s.handed_off is True
+    assert s.open_gate is None
     md = render_status_md("smoke")
     assert "[x] handed-off" in md
-    assert "All stages complete" in md
+    assert "已交给" in md
 
 
-def test_next_subcommand_hint(fake_dir):
+def test_all_gates_cleared_points_at_handoff(fake_dir):
     save_idea(_sample())
+    update_idea("smoke", status="experiment-ready")
     md = render_status_md("smoke")
-    # First incomplete stage is "scouted" → next subcommand is `scout`.
-    assert "`/idea-check scout`" in md
+    assert "`/idea-check handoff`" in md
 
 
-def test_no_manifest_renders_all_empty(fake_dir):
+def test_no_manifest_renders_an_empty_board(fake_dir):
     md = render_status_md("ghost")
-    assert "[ ] captured" in md
+    assert "[ ] 1. 真实失效场景 (`failure-case`)" in md
     assert "[ ] handed-off" in md
-    assert "/idea-check socratic" in md
+    assert "`/idea-check failure-case`" in md

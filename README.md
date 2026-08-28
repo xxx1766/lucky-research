@@ -11,7 +11,7 @@ track your trajectory over time, and migrate the whole workspace across machines
 | Slash | Skill / agent | What it does |
 |---|---|---|
 | `/summarize`   | `lit-summarize`            | Summarize PDFs (`inputs/papers/*.pdf`) or arXiv URLs into structured markdown; index in AgentDB `papers/`. |
-| `/idea-check`  | `idea-validate`            | 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge → handoff`) plus two micro-flows (`brainstorm` at 1.5, `contrarian` at 2.5) and an on-demand `2paper` story-packaging lens (skill: `academic-story-packaging`). Legacy `horizontal` / `vertical` modes still supported. |
+| `/idea-check`  | `idea-validate`            | Five-gate idea validator (`failure-case → problem-standalone → mechanism → predictions → minimal-experiment`). An uncleared gate hard-blocks every later gate and `handoff`; `--force` records the real verdict and keeps the override visible. `scout` / `brainstorm` / `contrarian` / `assumptions` / `evaluate` / `venues` / `knowledge` / `2paper` are evidence services that never advance status. Legacy `horizontal` / `vertical` modes still supported. |
 | `/scout-swarm` | `research-swarm` (optional)| Optional ruflo accelerator — parallelize `/paper scout` with a researcher swarm. Degrades to "use `/paper scout`" when swarm tools are absent. |
 | `/paper`       | `paper-architect`          | Venue-rooted, multi-stage paper flow (`venue → direction → bind → scout → focus → motivate → write → render → humanize → review → verify → status → archive`) under `outputs/papers/<venue>/<direction>/`. `verify` runs a 3-pass evidence-closure audit (Evidence → Argument → Style) and builds a typed debt ledger surfaced on the status board. |
 | `/cite`        | `ref-manager`              | Scan LaTeX `\cite{...}` keys and merge BibTeX into `<direction>/refs.bib`. |
@@ -49,9 +49,13 @@ Open the repo in Claude Code. The slash commands and skills are auto-discovered 
 ```
 1.  Drop PDFs into inputs/papers/   (or pass arXiv URL inline)
 2.  /summarize                      → outputs/summaries/<slug>.md + AgentDB papers/
-3.  /idea-check "<free-text>"       → Socratic → brainstorm → scout → contrarian →
-                                       evaluate → venues → knowledge → handoff
-                                       (sets the /paper cursor)
+3.  /idea-check "<free-text>"       → capture, then five gates:
+                                       failure-case → problem-standalone →
+                                       mechanism → predictions →
+                                       minimal-experiment
+                                       (evidence via /idea-check scout,
+                                        contrarian, assumptions, brainstorm,
+                                        evaluate — none of which advance status)
 4.  /paper venue OSDI-2027          → outputs/papers/OSDI-2027/_venue.md
                                        (optionally `cp -r docs/venues/OSDI/2027/* .`
                                        for the conference _template/ — OSDI/2027/
@@ -115,9 +119,13 @@ inputs/papers/*.pdf  ──┐
 arXiv URL / DOI      ──┴──▶ /summarize ──▶ outputs/summaries/<slug>.md  + AgentDB papers/
                                                        │
                                                        ▼
-                                          /idea-check  (socratic → brainstorm → scout →
-                                                        contrarian → evaluate → venues →
-                                                        knowledge → handoff)
+                                          /idea-check  (capture → failure-case →
+                                                        problem-standalone →
+                                                        mechanism → predictions →
+                                                        minimal-experiment → handoff;
+                                                        services: scout, contrarian,
+                                                        assumptions, brainstorm,
+                                                        evaluate, venues, knowledge)
                                                        │
                                                        ▼
                                           /paper       (venue → direction → bind →

@@ -41,33 +41,59 @@ Glossary:
 
 ## 💡 `/idea-check` — validate an idea (skill: `idea-validate`)
 
-A 6-stage Socratic flow (`socratic → scout → evaluate → venues → knowledge →
-handoff`) plus two interstitial micro-flows (`brainstorm` 1.5 and `contrarian`
-2.5) and an on-demand `2paper` story-packaging lens. State is mirrored on disk
-**and** in AgentDB.
+A **five-gate** validation pipeline. The gates are the only progress axis; an
+uncleared gate hard-blocks every later gate and `handoff`. Everything else is a
+service the gates call for evidence — running a service never advances status.
+State is mirrored on disk **and** in AgentDB.
 
-| Subcommand | Purpose |
+```
+capture → failure-case → problem-standalone → mechanism → predictions
+        → minimal-experiment → handoff
+```
+
+| Gate subcommand | Purpose |
 |---|---|
-| `/idea-check` | Show the vault `_index.md` + status of the active idea. |
-| `/idea-check "<free-text>"` | **Stage 1** — Socratic capture. Creates the idea folder + manifest. |
-| `/idea-check socratic` | Re-enter Stage 1 for the active idea. |
-| `/idea-check brainstorm [<situation>]` | **Stage 1.5** — F1–F11 ideation frameworks; may spawn variant ideas. |
-| `/idea-check scout` | **Stage 2** — last-3-years arXiv scout + gap consolidation. Auto-triggers 2.5. |
-| `/idea-check contrarian [<slug>]` | **Stage 2.5** — 4-question contrarian micro-flow; may spawn `<slug>-contrarian`. |
-| `/idea-check evaluate` | **Stage 3** — value/feasibility rubric + pre-registration. |
-| `/idea-check venues` | **Stage 4** — venue ranking by fit score. |
-| `/idea-check knowledge` | **Stage 5** — brain-library study plan. |
-| `/idea-check handoff` | **Stage 6** — confirm + set the `/paper` cursor. |
-| `/idea-check 2paper [<slug>]` | **On-demand** — evidence-grounded paper story for the active idea (skill: `academic-story-packaging`). Writes `<slug>/story.md`; never advances `status`. |
-| `/idea-check status` | Render the 6-stage board for the active idea. |
+| `/idea-check "<free-text>"` | Capture (lightweight Socratic) → manifest + cursor, then straight into Gate 1. |
+| `/idea-check failure-case [--force]` | **Gate 1** — 现有方法到底在什么情况下真的会失效（具体、可复现）。说不清就是红灯。 |
+| `/idea-check problem-standalone [--force]` | **Gate 2** — 删掉你的方法，问题本身是否还成立、还有人关心。 |
+| `/idea-check mechanism [--force]` | **Gate 3** — 原来的方法错在哪、真正起作用的因素是什么（机制，不是现象）。 |
+| `/idea-check predictions [--force]` | **Gate 4** — 机制推出 ≥2 条带低成本验证方式的预测（校验器强制）。 |
+| `/idea-check minimal-experiment [--force]` | **Gate 5** — 最小实验 + pre-registration；之后才允许大规模跑。 |
+| `/idea-check gates` | Print the decision ledger `gates.md` (read-only). |
+| `/idea-check handoff` | Refused with the blocking gate unless all five cleared; then sets the `/paper` cursor. |
+
+`--force` records the **real** verdict (❌ stays ❌), lets the pipeline continue,
+and leaves the override visible in `gates.md` → Overrides, `status.md`,
+`_index.md`'s Status column, and the manifest's `forced_gates`.
+
+| Service subcommand | Purpose | Serves |
+|---|---|---|
+| `/idea-check socratic` | Re-enter capture; edit statement / hypothesis tree. | — |
+| `/idea-check brainstorm [<situation>]` | F1–F11 ideation frameworks; may spawn variant ideas. | any red gate |
+| `/idea-check scout` | Last-3-years arXiv scout + 4-bucket gaps. | Gates 1–2 |
+| `/idea-check contrarian [<slug>]` | 4-question contrarian micro-flow; may spawn `<slug>-contrarian`. | Gate 2 |
+| `/idea-check assumptions [<paper\|slug>]` | Mine a paper's unstated assumptions; a generally-false one spawns a new idea at Gate 1. | Gate 3 |
+| `/idea-check evaluate` | 10-axis value/feasibility rubric + risks + pre-registration. | Gates 3–5 |
+| `/idea-check venues` | Venue ranking by fit score. Run once before `handoff`. | — |
+| `/idea-check knowledge` | Brain-library study plan. | — |
+| `/idea-check 2paper [<slug>]` | Evidence-grounded paper story (skill: `academic-story-packaging`). | — |
+
+| Always available | Purpose |
+|---|---|
+| `/idea-check` | Show the vault `_index.md` + the active idea's gate board. |
+| `/idea-check status` | Gate board + service checklist + forced warnings. |
 | `/idea-check list` | Print `outputs/idea-checks/_index.md`. |
-| `/idea-check show <slug>` | Print one manifest + status. |
+| `/idea-check show <slug>` | Print one manifest + board. |
 | `/idea-check horizontal <free-text>` | Legacy horizontal comparison matrix (no colon — space-separated). |
 | `/idea-check vertical <slug>` | Legacy vertical lineage trace (no colon — space-separated). |
 
-- Per-idea folder: `outputs/idea-checks/<slug>/{idea.md, socratic.md, brainstorm.md, scout.md, contrarian.md, evaluate.md, venues.md, knowledge.md, story.md, status.md}`.
-- AgentDB: `ideas/<slug>`, `ideas/<slug>/{socratic,brainstorm,scout,contrarian,evaluation,venues,knowledge,story}`, cursor `project/idea-context.current`, handoff `project/paper-context.current`.
-- Helpers: `ideas/{socratic, brainstorm, scout, contrarian, evaluate, venues, knowledge, registry, slug, status}.py`.
+- Manifest `status` is semantic, one per cleared gate: `captured` →
+  `failure-case-found` → `problem-standalone` → `mechanism-explained` →
+  `predictions-locked` → `experiment-ready` → `handed-off`.
+- Per-idea folder: `outputs/idea-checks/<slug>/{idea.md, gates.md, status.md, socratic.md, brainstorm.md, scout.md, contrarian.md, assumptions.md, evaluate.md, venues.md, knowledge.md, story.md}`.
+- AgentDB: `ideas/<slug>`, `ideas/<slug>/gates`, `ideas/<slug>/{socratic,brainstorm,scout,contrarian,assumptions,evaluation,venues,knowledge,story}`, cursor `project/idea-context.current`, handoff `project/paper-context.current`.
+- Helpers: `ideas/{gates, socratic, brainstorm, scout, contrarian, evaluate, venues, knowledge, registry, slug, status}.py`.
+
 
 
 ---
